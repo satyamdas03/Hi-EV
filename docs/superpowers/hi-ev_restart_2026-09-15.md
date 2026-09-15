@@ -6,7 +6,7 @@ metadata:
   type: reference
   originSessionId: c391edcd-a13c-4b1e-a13a-14088c80d1a3
   created: 2026-09-15
-  modified: 2026-09-15T02:51:59.430Z
+  modified: 2026-09-15T13:40:00+10:00
 ---
 
 # EV / Hi-EV — Full Session Recovery Dossier
@@ -38,23 +38,29 @@ EV operates under a **strict personal-only boundary** — no work email, work Sl
 **Remote:** `https://github.com/satyamdas03/Hi-EV`
 **Branch:** `main`
 
-Key directories:
+Key directories and files:
 - `src/ev/` — all source code.
-- `src/ev/cli/main.py` — CLI entry point.
+- `src/ev/cli/main.py` — CLI entry point (`ev` commands).
 - `src/ev/daemon/daemon.py` — FastAPI daemon runner.
 - `src/ev/server/api.py` — FastAPI routes.
-- `src/ev/config.py` — Pydantic settings.
-- `src/ev/db/models.py` — SQLAlchemy models (`Ingest`, `Project`, `Event`).
-- `src/ev/memory/store.py` — `MemoryStore` with idempotent upsert.
-- `src/ev/memory/status.py` — `build_status_summary()` for status/brief.
+- `src/ev/config.py` — Pydantic settings; includes Google OAuth flags.
+- `src/ev/db/models.py` — SQLAlchemy models (`Ingest`, `Project`, `Event`, `Deadline`).
+- `src/ev/db/base.py` — `Base`, `SessionLocal`, `engine`.
+- `src/ev/memory/store.py` — `MemoryStore` with idempotent upsert for `Ingest` and `Deadline`.
+- `src/ev/memory/status.py` — `build_status_summary()` for status/brief; now includes upcoming deadline counts.
 - `src/ev/llm/client.py` — async OpenAI-compatible LLM client (NVIDIA NIM default).
 - `src/ev/ingestion/github.py`, `notes.py`, `gmail.py`, `calendar.py`, `google_auth.py` — ingestion connectors.
 - `src/ev/tools/` — tools: `status_tool.py`, `brief_tool.py`, `research_tool.py`, `work_tool.py`, `draft_tools.py`, `calendar_prep_tool.py`.
 - `tests/` — pytest suite.
-- `scripts/` — `seed_demo.py`, `test_nvidia_models.py`.
+- `scripts/`:
+  - `seed_demo.py` — seeds GitHub + notes data; updates `Project.repo_path` from env vars.
+  - `test_nvidia_models.py` — probes which NVIDIA NIM models work with the provided key.
+  - `google_auth.py` — standalone browser OAuth flow; saves `secrets/token.json`.
+  - `sync_google.py` — ingests live Gmail + Calendar into EV memory.
 - `docs/superpowers/plans/2026-09-15-hi-ev-phase2.md` — completed Phase 2 plan.
 - `docs/superpowers/plans/2026-09-15-hi-ev-phase3.md` — Phase 3 plan.
 - `docs/superpowers/research/2026-09-15-nvidia-api-livekit-voice.md` — research on NVIDIA models + voice options.
+- `docs/superpowers/hi-ev_restart_2026-09-15.md` — mirror of this dossier.
 - `.superpowers/sdd/2026-09-15-hi-ev-phase2/report.md` — Phase 2 completion report.
 - `pyproject.toml` — hatchling packaging, pytest config.
 
@@ -70,25 +76,39 @@ Known values in `.env` as of this session (see the actual `.env` file; never com
 - `EV_NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1`
 - `EV_DATABASE_URL=sqlite+aiosqlite:///C:/Users/point/projects/Hi-EV/hiev.db`
 - `EV_NOTES_PATH=C:/Users/point/notes`
+- `EV_GOOGLE_ENABLED=true`
+- `EV_GOOGLE_CREDENTIALS_PATH=C:/Users/point/projects/Hi-EV/secrets/credentials.json`
 - Repo paths:
   - `EV_ROBOCAD_PATH=C:/Users/point/projects/RoboCAD`
   - `EV_LEARNINGROBOTICS_PATH=C:/Users/point/projects/LearningRobotics`
   - `EV_HIEV_PATH=C:/Users/point/projects/Hi-EV`
 
-Add `.env` values only; never paste them into code or memory files.
+OAuth files (also gitignored):
+- `C:/Users/point/projects/Hi-EV/secrets/credentials.json` — Google Desktop app client secret.
+- `C:/Users/point/projects/Hi-EV/secrets/token.json` — user access token from completed OAuth flow.
+
+Add `.env` values and OAuth files only; never paste them into code or memory files.
 
 ---
 
 ## 4. Current phase and status
 
-**Phase 2 is complete and pushed.**
+**Phase 2 is complete and pushed.** Phase 3 planning is done; real-time Google sync is now live.
 
-Latest commit: `0ce429f` on `main`.
-Previous key commit: `da02b46` (NVIDIA model + repo path fixes).
+Latest commit: `d85c160` on `main`.
+Key prior commits:
+- `0ce429f` — Phase 3 plan.
+- `6b1e0c4` — session recovery dossier mirror.
+- `da02b46` — NVIDIA model + repo path fixes.
 
 Test result:
 - `python -m pytest` → **56 passed, 1 skipped**.
 - `ruff check src tests scripts` → clean.
+
+Live data in EV memory:
+- 30 GitHub records (RoboCAD, LearningRobotics, Hi-EV) from `seed_demo.py`.
+- 20 Gmail messages from personal inbox via `scripts/sync_google.py`.
+- 30 Google Calendar events and 30 extracted `Deadline` rows via `scripts/sync_google.py`.
 
 Daemon state:
 - EV daemon should be running on `http://127.0.0.1:7345`.
@@ -129,8 +149,23 @@ Daemon state:
 
 7. **Read-only Gmail/Calendar ingestion** (`src/ev/ingestion/gmail.py`, `src/ev/ingestion/calendar.py`, `src/ev/ingestion/google_auth.py`, `tests/test_google_ingestion.py`, `tests/test_calendar_prep.py`).
    - Gated by `EV_GOOGLE_ENABLED=true` and `assert_personal_only`.
-   - Requires Google OAuth `credentials.json` (not yet provided by user).
-   - `ev calendar-prep` / `POST /calendar-prep` skeleton exists.
+   - Uses `google_auth_oauthlib` desktop app flow.
+   - `GmailIngestion` blocks work domains (currently `financialsimplicity.com`) via `Blocklist`.
+   - `CalendarIngestion` extracts `Deadline` rows from calendar events.
+
+### Live Google OAuth + sync completed today
+
+- Created a Google Cloud **Desktop app** OAuth client for EV.
+- Enabled **Gmail API** and **Calendar API**.
+- Downloaded `credentials.json` to `C:/Users/point/projects/Hi-EV/secrets/credentials.json`.
+- Added `EV_GOOGLE_ENABLED=true` and `EV_GOOGLE_CREDENTIALS_PATH=...` to `.env`.
+- Ran `python scripts/google_auth.py`, completed browser consent flow, and saved `secrets/token.json`.
+- Ran `python scripts/sync_google.py` successfully:
+  - 20 Gmail messages ingested.
+  - 30 calendar events ingested.
+  - 30 `Deadline` rows extracted and upserted.
+- Fixed `src/ev/google_auth.py` to store `token.json` in `secrets/` folder.
+- Updated `StatusTool`/`BriefTool` to surface upcoming deadline counts.
 
 ### Key bug fixes today
 
@@ -142,6 +177,7 @@ Daemon state:
 - **StatusTool KeyError:** added graceful fallback when project is missing.
 - **`python -m evd` ran CLI instead of daemon:** fixed `src/evd.py` to import and call daemon `run()`.
 - **CWD-relative DB issues:** set absolute SQLite path in `.env`.
+- **Google token path:** changed `src/ev/google_auth.py` to save `token.json` in `secrets/` instead of a hidden sidecar.
 
 ### Verification performed today
 
@@ -149,8 +185,11 @@ Daemon state:
 - `ruff check src tests scripts` → clean.
 - Restarted EV daemon on `127.0.0.1:7345`.
 - Seeded 30 GitHub records from RoboCAD, LearningRobotics, Hi-EV.
+- Ran `python scripts/google_auth.py` and completed browser OAuth consent.
+- Ran `python scripts/sync_google.py`: 20 Gmail + 30 calendar events + 30 deadlines stored.
 - API smoke tests:
-  - `POST /status {"project":"Hi-EV"}` → works.
+  - `GET /health` → `{"status":"ok"}`.
+  - `POST /status {"project":"Hi-EV"}` → phase + latest commit + deadline count.
   - `POST /brief` → works.
   - `POST /research {"query":"best local voice assistant stack 2026"}` → works with citations.
   - `POST /draft {"type":"reply",...}` → works.
@@ -177,22 +216,11 @@ Research doc: `docs/superpowers/research/2026-09-15-nvidia-api-livekit-voice.md`
 
 ## 7. What is blocked / waiting on the user
 
-**Gmail/Calendar live ingestion** is the only feature waiting on user action:
+**Nothing is currently blocked.** Gmail/Calendar live sync is working.
 
-Steps to enable:
-1. Go to [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials).
-2. Create a **Desktop app** OAuth 2.0 Client ID.
-3. Enable **Gmail API** and **Google Calendar API**.
-4. Download `client_secret_*.json`, rename to `credentials.json`.
-5. Place it at `C:/Users/point/projects/Hi-EV/secrets/credentials.json`.
-6. Add to `.env`:
-   ```
-   EV_GOOGLE_ENABLED=true
-   EV_GOOGLE_CREDENTIALS_PATH=secrets/credentials.json
-   ```
-7. Run the auth script to perform browser flow and save `token.json`.
-
-Once credentials are in place, EV can ingest real personal Gmail + Calendar data, populate `Deadline` and `Person` rows, and enable Phase 3 alerting/prep features.
+Next optional user actions:
+- Provide additional work domains to block in Gmail ingestion (currently only `financialsimplicity.com`).
+- Confirm whether to proceed with Phase 3 schema work (`Person`, `Obligation`, proactive alerts, pre-meeting prep).
 
 ---
 
@@ -201,7 +229,7 @@ Once credentials are in place, EV can ingest real personal Gmail + Calendar data
 | Tier | Policy | Examples |
 |------|--------|----------|
 | T0 | Always auto | memory/web/repo search, `ev status`, `ev brief`, `ev research` |
-| T1 | Auto, log, undoable | draft PR/commit/email, run tests, spawn Claude Code, `ev work on`, `ev calendar-prep` |
+| T1 | Auto, log, undoable | draft PR/commit/email, run tests, spawn Claude Code, `ev work on`, `ev calendar-prep`, read-only Gmail/Calendar sync |
 | T2 | Confirm exact payload | send email, push non-main branch, merge PR, post publicly (not yet implemented) |
 | T3 | Hard-blocked | push to main, publish anything, spend money, touch work accounts or patent/IP (not yet fully enforced) |
 
@@ -218,6 +246,7 @@ cd C:/Users/point/projects/Hi-EV
 python -m pytest
 ruff check src tests scripts
 python scripts/seed_demo.py
+python scripts/sync_google.py
 python -m evd
 ```
 
@@ -237,17 +266,17 @@ ev draft reply --to "test@example.com" --subject "Hello" --snippet "Want to meet
 Phase 3 is planned at `docs/superpowers/plans/2026-09-15-hi-ev-phase3.md`.
 
 Main goals:
-1. Add structured memory tables: `Deadline`, `Person`, `Obligation`, `Decision`.
-2. Enable real Gmail/Calendar ingestion once user provides `credentials.json`.
-3. Build `DeadlineWatcherTool` and `ev alerts` / `POST /alerts`.
-4. Add proactive alert loop inside the daemon (respect quiet hours and kill switch).
-5. Build `PrepTool` and `ev prep "meeting"` / `POST /prep` for pre-meeting prep.
-6. Surface deadlines and obligations in `ev brief`.
+1. Add structured memory tables: `Deadline`, `Person`, `Obligation`, `Decision`. (`Deadline` already exists and is populated from Calendar.)
+2. Build `DeadlineWatcherTool` and `ev alerts` / `POST /alerts`.
+3. Add proactive alert loop inside the daemon (respect quiet hours and kill switch).
+4. Build `PrepTool` and `ev prep "meeting"` / `POST /prep` for pre-meeting prep.
+5. Surface deadlines and obligations in `ev brief`.
+6. Real Gmail/Calendar sync is already enabled; Phase 3 will use it for alerts and prep.
 
 Next session should start by:
 1. Confirming daemon still starts and tests pass.
-2. Asking whether the user wants to provide Google OAuth credentials or start Phase 3 schema work first.
-3. If no credentials yet, implement `Deadline`/`Person`/`Obligation` schema + tests + synthetic seed data so the watcher/prep tools can be built independently.
+2. Implementing `Person` and `Obligation` models + tests + seeding from Gmail/Calendar.
+3. Building `DeadlineWatcherTool`, alert loop, and `PrepTool`.
 
 ---
 
@@ -259,9 +288,10 @@ Next session should start by:
 - `ev status` takes a positional argument (`ev status Hi-EV`), not `--project`.
 - `ev draft commit` and `ev draft pr` require `--project`.
 - Daemon port is `7345`. If it fails to bind, kill the existing `python` process on that port.
-- The project is local-first; the NVIDIA API is the only cloud dependency currently used. DuckDuckGo search is also cloud but no API key.
+- The project is local-first; the NVIDIA API is the only cloud dependency currently used. DuckDuckGo search is also cloud but no API key. Google APIs are now used for read-only Gmail/Calendar sync.
 - Always preserve the personal-only boundary. If a connector or tool might touch work data, gate it behind `EV_PERSONAL_ONLY=true` (default) and a blocklist.
 - User explicitly authorized use of `.env`, running tests, and running the daemon without asking each time.
+- `token.json` from Google OAuth is already saved in `secrets/`. If it expires, run `python scripts/google_auth.py` again to refresh.
 
 ---
 
