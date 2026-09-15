@@ -76,3 +76,67 @@ python -m pytest -v
 
 - The `PlainValidator` workaround for `notes_path` is slightly non-standard. Once Hi-EV targets POSIX deployments primarily, it can be removed and the field can use `pathlib.Path` directly.
 - A full `pip install -e .[dev]` was not attempted because Python 3.14 wheels are not guaranteed for all listed dependencies. The project should be tested in a Python 3.12 environment (per `requires-python`) before broader use.
+
+---
+
+# Fix Report (Task 1 Review)
+
+## What changed
+
+Addressed three review findings:
+
+1. **CLI entrypoint stub** — Added `src/ev/cli/main.py` with a minimal `click.group()` named `cli`, plus `src/ev/cli/__init__.py` so `ev.cli.main` is a proper submodule. This satisfies the `ev = "ev.cli.main:cli"` console script declared in `pyproject.toml`.
+2. **Settings cache robustness** — Updated `tests/test_config.py` to call `get_settings.cache_clear()` after monkeypatching environment variables and before invoking `get_settings()`. This prevents stale cached settings from previous test runs or later tests.
+3. **`notes_path` type consistency** — Removed the `Annotated[Path, PlainValidator(...)]` workaround. Changed the field type to `PurePosixPath` and set the default to `PurePosixPath(Path.home() / "notes")`. This keeps the POSIX-style assertion `str(settings.notes_path) == "/tmp/notes"` portable while matching the runtime type exactly.
+
+## Files changed
+
+- `src/ev/config.py`
+- `tests/test_config.py`
+- `src/ev/cli/__init__.py` (new)
+- `src/ev/cli/main.py` (new)
+
+## Tests run
+
+### Config test
+
+Command:
+```bash
+cd C:/Users/point/projects/Hi-EV && python -m pytest tests/test_config.py::test_settings_loads_from_env -v
+```
+
+Output:
+```text
+tests/test_config.py::test_settings_loads_from_env PASSED                [100%]
+1 passed in 0.13s
+```
+
+### Full suite
+
+Command:
+```bash
+cd C:/Users/point/projects/Hi-EV && python -m pytest -v
+```
+
+Output:
+```text
+tests/test_config.py::test_settings_loads_from_env PASSED                [100%]
+1 passed in 0.14s
+```
+
+### CLI import verification
+
+Command:
+```bash
+cd C:/Users/point/projects/Hi-EV && PYTHONPATH=src python -c "from ev.cli.main import cli; print(cli)"
+```
+
+Output:
+```text
+<Group cli>
+```
+
+## Concerns after fix
+
+- `PurePosixPath` for `notes_path` is a deliberate portability choice. If the project later needs filesystem operations on `notes_path`, it should be converted to a concrete `Path` at the call site.
+- The CLI is intentionally a stub; commands will be added in later tasks.
