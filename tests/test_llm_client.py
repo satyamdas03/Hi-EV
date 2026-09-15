@@ -39,7 +39,7 @@ async def test_llm_client_nvidia_request_body_and_response(mock_async_client):
             nvidia_api_key="nvapi-test",
             nvidia_base_url="https://integrate.api.nvidia.com/v1",
             llm_provider="nvidia",
-            llm_model="meta/llama-3.3-70b-instruct",
+            llm_model="meta/llama-3.2-11b-vision-instruct",
         )
     )
     result = await client.complete(
@@ -53,7 +53,7 @@ async def test_llm_client_nvidia_request_body_and_response(mock_async_client):
     url, kwargs = mock_client.post.call_args
     assert url[0] == "https://integrate.api.nvidia.com/v1/chat/completions"
     body = kwargs["json"]
-    assert body["model"] == "meta/llama-3.3-70b-instruct"
+    assert body["model"] == "meta/llama-3.2-11b-vision-instruct"
     assert body["messages"] == [{"role": "user", "content": "hi"}]
     assert body["temperature"] == 0.5
     assert body["max_tokens"] == 512

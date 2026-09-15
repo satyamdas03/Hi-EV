@@ -13,11 +13,11 @@ class LLMClientError(Exception):
 
 def _default_model(provider: str) -> str:
     defaults = {
-        "nvidia": "meta/llama-3.3-70b-instruct",
+        "nvidia": "meta/llama-3.2-11b-vision-instruct",
         "openai": "gpt-4o-mini",
         "anthropic": "claude-3-5-sonnet-20241022",
     }
-    return defaults.get(provider, "meta/llama-3.3-70b-instruct")
+    return defaults.get(provider, "meta/llama-3.2-11b-vision-instruct")
 
 
 class LLMClient:
@@ -90,5 +90,6 @@ class LLMClient:
             choices = data.get("choices", [])
             if not choices:
                 raise LLMClientError("LLM response contained no choices")
-            content = choices[0].get("message", {}).get("content", "")
+            message = choices[0].get("message", {})
+            content = message.get("content") or message.get("reasoning_content") or ""
         return content.strip()

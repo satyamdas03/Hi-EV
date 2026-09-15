@@ -11,11 +11,11 @@ The `nvapi-...` key you provided works with the NVIDIA NIM API Catalog at `https
 ### Chat completions
 - Endpoint: `POST https://integrate.api.nvidia.com/v1/chat/completions`
 - Example model IDs from the catalog:
-  - `meta/llama-3.3-70b-instruct`
-  - `nvidia/llama-3.1-70b-instruct`
-  - `openai/gpt-oss-120b`
-  - `deepseek-ai/deepseek-v4-flash-0731`
-  - `nvidia/nemotron-3.5-lightning-30b-a3b`
+  - `meta/llama-3.2-11b-vision-instruct` — verified working with the provided key, clean final answers
+  - `nvidia/nemotron-3-super-120b-a12b` — verified working, clean but very brief answers
+  - `openai/gpt-oss-20b` — verified working
+  - `nvidia/nemotron-3.5-lightning-30b-a3b` — returns reasoning traces rather than final answers for this key
+  - `meta/llama-3.3-70b-instruct` — EOL (returns 410 Gone)
 - Parameters match OpenAI: `messages`, `temperature`, `top_p`, `max_tokens`, `stream`, `tools`, `tool_choice`.
 - Free trial credits are available; after they run out there is a quota of 100 req/min/IP with a 24-hour account cap.
 

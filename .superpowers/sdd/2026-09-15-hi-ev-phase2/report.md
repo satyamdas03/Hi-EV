@@ -56,7 +56,7 @@ The single skipped test is the live GitHub integration test (`tests/test_integra
 
 ## Notable implementation details
 
-- **LLM:** `LLMClient` defaults to NVIDIA NIM (`meta/llama-3.3-70b-instruct`) with OpenAI-compatible chat completions. `EV_LLM_PROVIDER` can also be `openai` or `anthropic`.
+- **LLM:** `LLMClient` defaults to NVIDIA NIM (`meta/llama-3.2-11b-vision-instruct`) with OpenAI-compatible chat completions. `EV_LLM_PROVIDER` can also be `openai` or `anthropic`.
 - **Search:** DuckDuckGo HTML search is done with `httpx` and regex parsing of `result__a`, `result__url`, and `result__snippet`. No API key required.
 - **Work spawn:** `WorkTool` uses `asyncio.create_subprocess_exec` to spawn `claude code` in the target repo with a prepared context payload. It logs a `spawn_claude_code` event.
 - **Drafts:** `DraftCommitTool`, `DraftPrTool`, and `DraftReplyTool` are all Tier 1 (reversible). They read diffs/snippets and write draft text only.

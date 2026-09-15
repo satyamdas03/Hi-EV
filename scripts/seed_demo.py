@@ -22,8 +22,23 @@ async def main() -> None:
 
         gh = GitHubIngestion(settings)
         repos = [("satyamdas03", "RoboCAD"), ("satyamdas03", "LearningRobotics"), ("satyamdas03", "Hi-EV")]
+        repo_path_map = {
+            "RoboCAD": settings.robocad_path,
+            "LearningRobotics": settings.learningrobotics_path,
+            "Hi-EV": settings.hiev_path,
+        }
         for owner, name in repos:
-            await store.get_or_create_project(name, repo_url=f"https://github.com/{owner}/{name}")
+            repo_path = repo_path_map.get(name)
+            project = await store.get_or_create_project(
+                name,
+                repo_url=f"https://github.com/{owner}/{name}",
+                repo_path=str(repo_path) if repo_path else None,
+            )
+            # Ensure existing projects get updated repo paths from .env.
+            if repo_path and str(repo_path) != project.repo_path:
+                project.repo_path = str(repo_path)
+                session.add(project)
+                await session.commit()
             gh.add_repo(owner, name)
         gh_records = await gh.ingest()
         await store.upsert_ingest(gh_records)
