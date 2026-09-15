@@ -1,7 +1,7 @@
 """Hi-EV SQLAlchemy ORM models."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     Boolean,
@@ -19,7 +19,7 @@ from .base import Base
 
 def now_utc() -> datetime:
     """Return the current UTC-aware datetime."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Ingest(Base):

@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import select
 
 from ev.db.base import Base, SessionLocal, engine
-from ev.db.models import Event, Ingest, Project
+from ev.db.models import Event, Ingest, Project  # noqa: F401
 
 
 @pytest.fixture
