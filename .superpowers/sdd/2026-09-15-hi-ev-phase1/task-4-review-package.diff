@@ -1,0 +1,166 @@
+diff --git a/src/ev/config.py b/src/ev/config.py
+index 202c54d..990372d 100644
+--- a/src/ev/config.py
++++ b/src/ev/config.py
+@@ -11,20 +11,20 @@ class Settings(BaseSettings):
+     model_config = SettingsConfigDict(
+         env_prefix="EV_",
+         env_file=".env",
+         env_file_encoding="utf-8",
+         extra="ignore",
+     )
+ 
+     database_url: str = "postgresql://localhost:5432/hiev"
+     redis_url: str = "redis://localhost:6379/0"
+     personal_only: bool = Field(default=True)
+-    notes_path: PurePosixPath = Field(default=PurePosixPath(Path.home() / "notes"))
++    notes_path: PurePosixPath | Path = Field(default=PurePosixPath(Path.home() / "notes"))
+     github_token: SecretStr | None = None
+     openai_api_key: SecretStr | None = None
+     anthropic_api_key: SecretStr | None = None
+ 
+ 
+ @lru_cache
+ def get_settings() -> Settings:
+     """Return the cached application settings."""
+     return Settings()
+diff --git a/src/ev/ingestion/__init__.py b/src/ev/ingestion/__init__.py
+new file mode 100644
+index 0000000..539ee0c
+--- /dev/null
++++ b/src/ev/ingestion/__init__.py
+@@ -0,0 +1,5 @@
++"""Ingestion sources for the EV memory vault."""
++
++from .notes import NotesIngestion
++
++__all__ = ["NotesIngestion"]
+diff --git a/src/ev/ingestion/base.py b/src/ev/ingestion/base.py
+new file mode 100644
+index 0000000..0e215d1
+--- /dev/null
++++ b/src/ev/ingestion/base.py
+@@ -0,0 +1,13 @@
++"""Base abstraction for ingestion sources."""
++
++from abc import ABC, abstractmethod
++from typing import Any
++
++
++class IngestionSource(ABC):
++    """A generic source that produces normalized ingest records."""
++
++    @abstractmethod
++    def ingest(self) -> list[dict[str, Any]]:
++        """Return a list of normalized memory records."""
++        raise NotImplementedError
+diff --git a/src/ev/ingestion/notes.py b/src/ev/ingestion/notes.py
+new file mode 100644
+index 0000000..bbf4f81
+--- /dev/null
++++ b/src/ev/ingestion/notes.py
+@@ -0,0 +1,54 @@
++"""Notes vault ingestion source."""
++
++import hashlib
++from pathlib import Path
++from typing import Any
++
++from ev.config import Settings
++from ev.security.boundary import Blocklist, personal_only_guard
++
++from .base import IngestionSource
++
++
++def _hash(content: str) -> str:
++    return hashlib.sha256(content.encode("utf-8")).hexdigest()
++
++
++class NotesIngestion(IngestionSource):
++    """Ingest a folder of personal markdown notes."""
++
++    def __init__(self, config: Settings):
++        with personal_only_guard(config):
++            self.root = Path(config.notes_path)
++            self.blocklist = Blocklist(
++                work_handles=["financialsimplicity"],
++                work_domains=["financialsimplicity.com"],
++            )
++
++    def ingest(self) -> list[dict[str, Any]]:
++        records: list[dict[str, Any]] = []
++        if not self.root.exists():
++            return records
++        for path in self.root.rglob("*.md"):
++            content = path.read_text(encoding="utf-8", errors="ignore")
++            rel = str(path.relative_to(self.root))
++            if self.blocklist.is_blocked_repo(rel) or self.blocklist.is_blocked_account(rel):
++                continue
++            records.append(
++                {
++                    "source": "notes",
++                    "source_id": str(path),
++                    "content_hash": _hash(content),
++                    "content": content,
++                    "project_tag": self._guess_project_tag(content, rel),
++                    "privacy_level": "personal",
++                }
++            )
++        return records
++
++    def _guess_project_tag(self, content: str, rel_path: str) -> str | None:
++        lower = (content + " " + rel_path).lower()
++        for keyword in ["robocad", "learningrobotics", "neuralquant", "hi-ev"]:
++            if keyword in lower:
++                return keyword
++        return None
+diff --git a/tests/test_ingestion_notes.py b/tests/test_ingestion_notes.py
+new file mode 100644
+index 0000000..887f484
+--- /dev/null
++++ b/tests/test_ingestion_notes.py
+@@ -0,0 +1,44 @@
++"""Tests for the notes vault ingestion source."""
++
++import tempfile
++from pathlib import Path
++
++import pytest
++
++from ev.config import Settings
++from ev.ingestion.notes import NotesIngestion
++from ev.security.boundary import PersonalOnlyError
++
++
++def test_notes_ingestion_finds_markdown():
++    with tempfile.TemporaryDirectory() as tmp:
++        root = Path(tmp)
++        (root / "robocad.md").write_text("# RoboCAD\nPhase 29 delivered.")
++        (root / "ideas.md").write_text("- patent idea for gripper")
++        ingester = NotesIngestion(Settings(notes_path=root, personal_only=True))
++        records = ingester.ingest()
++        assert len(records) == 2
++        assert any("Phase 29" in r["content"] for r in records)
++        assert all(r["source"] == "notes" for r in records)
++        assert all(r["source_id"] for r in records)
++        assert all(r["content_hash"] for r in records)
++        assert all(r["privacy_level"] == "personal" for r in records)
++
++
++def test_notes_ingestion_refuses_non_personal_mode():
++    with tempfile.TemporaryDirectory() as tmp:
++        root = Path(tmp)
++        (root / "note.md").write_text("personal note")
++        with pytest.raises(PersonalOnlyError):
++            NotesIngestion(Settings(notes_path=root, personal_only=False))
++
++
++def test_notes_ingestion_skips_blocklisted_files():
++    with tempfile.TemporaryDirectory() as tmp:
++        root = Path(tmp)
++        (root / "robocad.md").write_text("# RoboCAD")
++        (root / "financialsimplicity.md").write_text("work stuff")
++        ingester = NotesIngestion(Settings(notes_path=root, personal_only=True))
++        records = ingester.ingest()
++        assert len(records) == 1
++        assert records[0]["source_id"].endswith("robocad.md")

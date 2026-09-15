@@ -1,0 +1,98 @@
+diff --git a/alembic/env.py b/alembic/env.py
+index 01214f3..a5ea8a3 100644
+--- a/alembic/env.py
++++ b/alembic/env.py
+@@ -1,21 +1,20 @@
+ """Async Alembic environment for Hi-EV."""
+ 
+ import asyncio
+ from logging.config import fileConfig
+ 
+ from sqlalchemy import pool
+ from sqlalchemy.engine import Connection
+ from sqlalchemy.ext.asyncio import async_engine_from_config
+ 
+ from alembic import context
+-
+ from ev.config import get_settings
+ from ev.db.base import Base
+ 
+ # This is the Alembic Config object.
+ config = context.config
+ 
+ # Interpret the config file for Python logging.
+ if config.config_file_name is not None:
+     fileConfig(config.config_file_name)
+ 
+diff --git a/src/ev/db/__init__.py b/src/ev/db/__init__.py
+index fa2044b..4f99f34 100644
+--- a/src/ev/db/__init__.py
++++ b/src/ev/db/__init__.py
+@@ -1,6 +1,6 @@
+ """Hi-EV database exports."""
+ 
+ from .base import Base, SessionLocal, engine
+ from .models import Event, Ingest, Project
+ 
+-__all__ = ["Base", "SessionLocal", "engine", "Event", "Ingest", "Project"]
++__all__ = ["Base", "Event", "Ingest", "Project", "SessionLocal", "engine"]
+diff --git a/src/ev/db/models.py b/src/ev/db/models.py
+index 2fc6baa..80027dc 100644
+--- a/src/ev/db/models.py
++++ b/src/ev/db/models.py
+@@ -1,32 +1,32 @@
+ """Hi-EV SQLAlchemy ORM models."""
+ 
+ import uuid
+-from datetime import datetime, timezone
++from datetime import UTC, datetime
+ 
+ from sqlalchemy import (
+     Boolean,
+     Column,
+     DateTime,
+     ForeignKey,
+     String,
+     Text,
+     UniqueConstraint,
+     Uuid,
+ )
+ 
+ from .base import Base
+ 
+ 
+ def now_utc() -> datetime:
+     """Return the current UTC-aware datetime."""
+-    return datetime.now(timezone.utc)
++    return datetime.now(UTC)
+ 
+ 
+ class Ingest(Base):
+     """Raw ingestion records with idempotency via (source, source_id)."""
+ 
+     __tablename__ = "ingest"
+     __table_args__ = (
+         UniqueConstraint("source", "source_id", name="uix_ingest_source_id"),
+     )
+ 
+diff --git a/tests/test_db.py b/tests/test_db.py
+index 0a14057..a9fbb10 100644
+--- a/tests/test_db.py
++++ b/tests/test_db.py
+@@ -1,15 +1,15 @@
+ import pytest
+ from sqlalchemy import select
+ 
+ from ev.db.base import Base, SessionLocal, engine
+-from ev.db.models import Event, Ingest, Project
++from ev.db.models import Event, Ingest, Project  # noqa: F401
+ 
+ 
+ @pytest.fixture
+ async def db_session():
+     async with engine.begin() as conn:
+         await conn.run_sync(Base.metadata.create_all)
+     async with SessionLocal() as session:
+         yield session
+     async with engine.begin() as conn:
+         await conn.run_sync(Base.metadata.drop_all)

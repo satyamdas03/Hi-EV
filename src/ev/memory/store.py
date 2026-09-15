@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 
 from ev.db.models import Event, Ingest, Project
 
@@ -25,10 +25,7 @@ class MemoryStore:
 
         keys = {(r["source"], r["source_id"]) for r in records}
         result = await self.session.execute(
-            select(Ingest).where(
-                Ingest.source.in_([s for s, _ in keys])
-                & Ingest.source_id.in_([i for _, i in keys])
-            )
+            select(Ingest).where(tuple_(Ingest.source, Ingest.source_id).in_(list(keys)))
         )
         existing = {(row.source, row.source_id): row for row in result.scalars().all()}
 

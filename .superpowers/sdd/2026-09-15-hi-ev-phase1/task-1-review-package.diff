@@ -1,0 +1,132 @@
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..360c189
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,7 @@
++EV_DATABASE_URL=postgresql://localhost:5432/hiev
++EV_REDIS_URL=redis://localhost:6379/0
++EV_PERSONAL_ONLY=true
++EV_NOTES_PATH=/path/to/your/notes
++EV_GITHUB_TOKEN=ghp_xxxxxxxx
++EV_ANTHROPIC_API_KEY=sk-ant-xxxxxxxx
++EV_OPENAI_API_KEY=sk-xxxxxxxx
+diff --git a/pyproject.toml b/pyproject.toml
+new file mode 100644
+index 0000000..9fb0077
+--- /dev/null
++++ b/pyproject.toml
+@@ -0,0 +1,39 @@
++[build-system]
++requires = ["hatchling"]
++build-backend = "hatchling.build"
++
++[project]
++name = "hi-ev"
++version = "0.1.0"
++description = "EV — personal AI operating system"
++requires-python = ">=3.12"
++dependencies = [
++    "fastapi>=0.111.0",
++    "uvicorn[standard]>=0.30.0",
++    "sqlalchemy>=2.0.0",
++    "alembic>=1.13.0",
++    "pgvector>=0.2.5",
++    "psycopg2-binary>=2.9.9",
++    "asyncpg>=0.29.0",
++    "redis>=5.0.0",
++    "pydantic>=2.7.0",
++    "pydantic-settings>=2.3.0",
++    "httpx>=0.27.0",
++    "click>=8.1.0",
++    "python-dotenv>=1.0.0",
++]
++
++[project.optional-dependencies]
++dev = [
++    "pytest>=8.2.0",
++    "pytest-asyncio>=0.23.0",
++    "factory-boy>=3.3.0",
++    "ruff>=0.4.0",
++]
++
++[project.scripts]
++ev = "ev.cli.main:cli"
++
++[tool.pytest.ini_options]
++asyncio_mode = "auto"
++pythonpath = ["src"]
+diff --git a/src/ev/__init__.py b/src/ev/__init__.py
+new file mode 100644
+index 0000000..3dc1f76
+--- /dev/null
++++ b/src/ev/__init__.py
+@@ -0,0 +1 @@
++__version__ = "0.1.0"
+diff --git a/src/ev/config.py b/src/ev/config.py
+new file mode 100644
+index 0000000..cd784bd
+--- /dev/null
++++ b/src/ev/config.py
+@@ -0,0 +1,40 @@
++"""Hi-EV settings loader."""
++
++from functools import lru_cache
++from pathlib import Path, PurePosixPath
++from typing import Annotated
++
++from pydantic import Field, PlainValidator, SecretStr
++from pydantic_settings import BaseSettings, SettingsConfigDict
++
++
++def _posix_path(value):
++    """Preserve POSIX path strings on all platforms."""
++    if isinstance(value, str):
++        return PurePosixPath(value)
++    return value
++
++
++class Settings(BaseSettings):
++    model_config = SettingsConfigDict(
++        env_prefix="EV_",
++        env_file=".env",
++        env_file_encoding="utf-8",
++        extra="ignore",
++    )
++
++    database_url: str = "postgresql://localhost:5432/hiev"
++    redis_url: str = "redis://localhost:6379/0"
++    personal_only: bool = Field(default=True)
++    notes_path: Annotated[Path, PlainValidator(_posix_path)] = Field(
++        default=Path.home() / "notes"
++    )
++    github_token: SecretStr | None = None
++    openai_api_key: SecretStr | None = None
++    anthropic_api_key: SecretStr | None = None
++
++
++@lru_cache
++def get_settings() -> Settings:
++    """Return the cached application settings."""
++    return Settings()
+diff --git a/tests/test_config.py b/tests/test_config.py
+new file mode 100644
+index 0000000..c1206bf
+--- /dev/null
++++ b/tests/test_config.py
+@@ -0,0 +1,15 @@
++from ev.config import get_settings
++
++
++def test_settings_loads_from_env(monkeypatch):
++    monkeypatch.setenv("EV_DATABASE_URL", "postgresql://localhost:5432/hiev_test")
++    monkeypatch.setenv("EV_REDIS_URL", "redis://localhost:6379/0")
++    monkeypatch.setenv("EV_PERSONAL_ONLY", "true")
++    monkeypatch.setenv("EV_NOTES_PATH", "/tmp/notes")
++    monkeypatch.setenv("EV_GITHUB_TOKEN", "ghp_test")
++    settings = get_settings()
++    assert settings.database_url == "postgresql://localhost:5432/hiev_test"
++    assert settings.redis_url == "redis://localhost:6379/0"
++    assert settings.personal_only is True
++    assert str(settings.notes_path) == "/tmp/notes"
++    assert settings.github_token.get_secret_value() == "ghp_test"

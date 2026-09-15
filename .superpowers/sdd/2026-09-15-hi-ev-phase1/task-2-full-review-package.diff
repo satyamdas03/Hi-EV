@@ -1,0 +1,472 @@
+diff --git a/.gitignore b/.gitignore
+index 8d5d837..f21829b 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -51,20 +51,21 @@ cover/
+ 
+ # Translations
+ *.mo
+ *.pot
+ 
+ # Django stuff:
+ *.log
+ local_settings.py
+ db.sqlite3
+ db.sqlite3-journal
++*.db
+ 
+ # Flask stuff:
+ instance/
+ .webassets-cache
+ 
+ # Scrapy stuff:
+ .scrapy
+ 
+ # Sphinx documentation
+ docs/_build/
+diff --git a/.superpowers/sdd/2026-09-15-hi-ev-phase1/task-1-report.md b/.superpowers/sdd/2026-09-15-hi-ev-phase1/task-1-report.md
+index 75b44b9..c4919ef 100644
+--- a/.superpowers/sdd/2026-09-15-hi-ev-phase1/task-1-report.md
++++ b/.superpowers/sdd/2026-09-15-hi-ev-phase1/task-1-report.md
+@@ -69,10 +69,74 @@ python -m pytest -v
+ 1. The brief’s implementation used `pathlib.Path` for `notes_path`. On Windows, `str(Path("/tmp/notes"))` becomes `\\tmp\\notes`, which would fail the provided test assertion. To keep the test portable while retaining the `Path` annotation, I added a small `PlainValidator` that constructs a `PurePosixPath` when the input is a string. This preserves the exact assertion `str(settings.notes_path) == "/tmp/notes"` on Windows.
+ 2. The brief’s `pyproject.toml` snippet did not include a `[build-system]` section or `pythonpath` for pytest. Because this project uses a `src/` layout, I added `requires = ["hatchling"]` and `pythonpath = ["src"]` so tests can discover the package without requiring an editable install before dependencies are available.
+ 3. The test environment is running Python 3.14.0. I did not install the full dependency set because several packages (e.g. `psycopg2-binary`) may not provide wheels for 3.14. The test only needs `pydantic` and `pydantic-settings`, which are already installed, so the scaffold test passes cleanly.
+ 4. `get_settings()` is `lru_cache`d as specified. The single test does not exercise cache invalidation; that may need attention once multiple tests mutate environment variables.
+ 5. No secrets are committed; `.env.example` contains placeholder values and the real `.env` is gitignored by the existing repository setup.
+ 
+ ## Issues or concerns
+ 
+ - The `PlainValidator` workaround for `notes_path` is slightly non-standard. Once Hi-EV targets POSIX deployments primarily, it can be removed and the field can use `pathlib.Path` directly.
+ - A full `pip install -e .[dev]` was not attempted because Python 3.14 wheels are not guaranteed for all listed dependencies. The project should be tested in a Python 3.12 environment (per `requires-python`) before broader use.
++
++---
++
++# Fix Report (Task 1 Review)
++
++## What changed
++
++Addressed three review findings:
++
++1. **CLI entrypoint stub** — Added `src/ev/cli/main.py` with a minimal `click.group()` named `cli`, plus `src/ev/cli/__init__.py` so `ev.cli.main` is a proper submodule. This satisfies the `ev = "ev.cli.main:cli"` console script declared in `pyproject.toml`.
++2. **Settings cache robustness** — Updated `tests/test_config.py` to call `get_settings.cache_clear()` after monkeypatching environment variables and before invoking `get_settings()`. This prevents stale cached settings from previous test runs or later tests.
++3. **`notes_path` type consistency** — Removed the `Annotated[Path, PlainValidator(...)]` workaround. Changed the field type to `PurePosixPath` and set the default to `PurePosixPath(Path.home() / "notes")`. This keeps the POSIX-style assertion `str(settings.notes_path) == "/tmp/notes"` portable while matching the runtime type exactly.
++
++## Files changed
++
++- `src/ev/config.py`
++- `tests/test_config.py`
++- `src/ev/cli/__init__.py` (new)
++- `src/ev/cli/main.py` (new)
++
++## Tests run
++
++### Config test
++
++Command:
++```bash
++cd C:/Users/point/projects/Hi-EV && python -m pytest tests/test_config.py::test_settings_loads_from_env -v
++```
++
++Output:
++```text
++tests/test_config.py::test_settings_loads_from_env PASSED                [100%]
++1 passed in 0.13s
++```
++
++### Full suite
++
++Command:
++```bash
++cd C:/Users/point/projects/Hi-EV && python -m pytest -v
++```
++
++Output:
++```text
++tests/test_config.py::test_settings_loads_from_env PASSED                [100%]
++1 passed in 0.14s
++```
++
++### CLI import verification
++
++Command:
++```bash
++cd C:/Users/point/projects/Hi-EV && PYTHONPATH=src python -c "from ev.cli.main import cli; print(cli)"
++```
++
++Output:
++```text
++<Group cli>
++```
++
++## Concerns after fix
++
++- `PurePosixPath` for `notes_path` is a deliberate portability choice. If the project later needs filesystem operations on `notes_path`, it should be converted to a concrete `Path` at the call site.
++- The CLI is intentionally a stub; commands will be added in later tasks.
+diff --git a/alembic.ini b/alembic.ini
+new file mode 100644
+index 0000000..d8d4214
+--- /dev/null
++++ b/alembic.ini
+@@ -0,0 +1,43 @@
++# A generic, single database configuration.
++
++[alembic]
++script_location = alembic
++prepend_sys_path = src
++version_locations = %(here)s/alembic/versions
++sqlalchemy.url = postgresql+asyncpg://localhost:5432/hiev
++
++[post_write_hooks]
++
++[loggers]
++keys = root,sqlalchemy,alembic
++
++[handlers]
++keys = console
++
++[formatters]
++keys = generic
++
++[logger_root]
++level = WARN
++handlers = console
++qualname =
++
++[logger_sqlalchemy]
++level = WARN
++handlers =
++qualname = sqlalchemy.engine
++
++[logger_alembic]
++level = INFO
++handlers =
++qualname = alembic
++
++[handler_console]
++class = StreamHandler
++args = (sys.stderr,)
++level = NOTSET
++formatter = generic
++
++[formatter_generic]
++format = %(levelname)-5.5s [%(name)s] %(message)s
++datefmt = %H:%M:%S
+diff --git a/alembic/env.py b/alembic/env.py
+new file mode 100644
+index 0000000..a5ea8a3
+--- /dev/null
++++ b/alembic/env.py
+@@ -0,0 +1,78 @@
++"""Async Alembic environment for Hi-EV."""
++
++import asyncio
++from logging.config import fileConfig
++
++from sqlalchemy import pool
++from sqlalchemy.engine import Connection
++from sqlalchemy.ext.asyncio import async_engine_from_config
++
++from alembic import context
++from ev.config import get_settings
++from ev.db.base import Base
++
++# This is the Alembic Config object.
++config = context.config
++
++# Interpret the config file for Python logging.
++if config.config_file_name is not None:
++    fileConfig(config.config_file_name)
++
++# Model metadata for autogenerate support.
++target_metadata = Base.metadata
++
++
++def _to_async_url(url: str) -> str:
++    """Convert a synchronous Postgres URL to an asyncpg URL if needed."""
++    if url.startswith(("postgresql://", "postgres://")) and "+asyncpg" not in url:
++        return url.replace("://", "+asyncpg://", 1)
++    return url
++
++
++def _database_url() -> str:
++    """Return the async URL for the configured database."""
++    return _to_async_url(get_settings().database_url)
++
++
++def run_migrations_offline() -> None:
++    """Run migrations in 'offline' mode."""
++    url = _database_url()
++    context.configure(
++        url=url,
++        target_metadata=target_metadata,
++        literal_binds=True,
++        dialect_opts={"paramstyle": "named"},
++    )
++
++    with context.begin_transaction():
++        context.run_migrations()
++
++
++def do_run_migrations(connection: Connection) -> None:
++    """Run migrations against a connection."""
++    context.configure(connection=connection, target_metadata=target_metadata)
++    with context.begin_transaction():
++        context.run_migrations()
++
++
++async def run_migrations_online() -> None:
++    """Run migrations in 'online' mode."""
++    configuration = config.get_section(config.config_ini_section, {})
++    configuration["sqlalchemy.url"] = _database_url()
++
++    connectable = async_engine_from_config(
++        configuration,
++        prefix="sqlalchemy.",
++        poolclass=pool.NullPool,
++    )
++
++    async with connectable.connect() as connection:
++        await connection.run_sync(do_run_migrations)
++
++    await connectable.dispose()
++
++
++if context.is_offline_mode():
++    run_migrations_offline()
++else:
++    asyncio.run(run_migrations_online())
+diff --git a/alembic/script.py.mako b/alembic/script.py.mako
+new file mode 100644
+index 0000000..fbc4b07
+--- /dev/null
++++ b/alembic/script.py.mako
+@@ -0,0 +1,26 @@
++"""${message}
++
++Revision ID: ${up_revision}
++Revises: ${down_revision | comma,n}
++Create Date: ${create_date}
++
++"""
++from typing import Sequence, Union
++
++from alembic import op
++import sqlalchemy as sa
++${imports if imports else ""}
++
++# revision identifiers, used by Alembic.
++revision: str = ${repr(up_revision)}
++down_revision: Union[str, None] = ${repr(down_revision)}
++branch_labels: Union[str, Sequence[str], None] = ${repr(branch_labels)}
++depends_on: Union[str, Sequence[str], None] = ${repr(depends_on)}
++
++
++def upgrade() -> None:
++    ${upgrades if upgrades else "pass"}
++
++
++def downgrade() -> None:
++    ${downgrades if downgrades else "pass"}
+diff --git a/pyproject.toml b/pyproject.toml
+index 9fb0077..6b0918f 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -20,20 +20,21 @@ dependencies = [
+     "pydantic-settings>=2.3.0",
+     "httpx>=0.27.0",
+     "click>=8.1.0",
+     "python-dotenv>=1.0.0",
+ ]
+ 
+ [project.optional-dependencies]
+ dev = [
+     "pytest>=8.2.0",
+     "pytest-asyncio>=0.23.0",
++    "aiosqlite>=0.20.0",
+     "factory-boy>=3.3.0",
+     "ruff>=0.4.0",
+ ]
+ 
+ [project.scripts]
+ ev = "ev.cli.main:cli"
+ 
+ [tool.pytest.ini_options]
+ asyncio_mode = "auto"
+ pythonpath = ["src"]
+diff --git a/src/ev/db/__init__.py b/src/ev/db/__init__.py
+new file mode 100644
+index 0000000..4f99f34
+--- /dev/null
++++ b/src/ev/db/__init__.py
+@@ -0,0 +1,6 @@
++"""Hi-EV database exports."""
++
++from .base import Base, SessionLocal, engine
++from .models import Event, Ingest, Project
++
++__all__ = ["Base", "Event", "Ingest", "Project", "SessionLocal", "engine"]
+diff --git a/src/ev/db/base.py b/src/ev/db/base.py
+new file mode 100644
+index 0000000..77e2465
+--- /dev/null
++++ b/src/ev/db/base.py
+@@ -0,0 +1,30 @@
++"""Hi-EV async database engine and declarative base."""
++
++import os
++
++from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
++from sqlalchemy.orm import DeclarativeBase
++
++from ev.config import get_settings
++
++
++def _to_async_url(url: str) -> str:
++    """Convert a synchronous Postgres URL to an asyncpg URL if needed."""
++    if url.startswith(("postgresql://", "postgres://")) and "+asyncpg" not in url:
++        return url.replace("://", "+asyncpg://", 1)
++    return url
++
++
++# Allow EV_DATABASE_URL to override the configured settings URL for tests and
++# one-off scripts. In production, get_settings().database_url is the source of
++# truth when no environment override is present.
++_raw_url = os.environ.get("EV_DATABASE_URL") or get_settings().database_url
++DATABASE_URL = _to_async_url(_raw_url)
++
++
++class Base(AsyncAttrs, DeclarativeBase):
++    """Declarative base for all Hi-EV ORM models."""
++
++
++engine = create_async_engine(DATABASE_URL, echo=False)
++SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+diff --git a/src/ev/db/models.py b/src/ev/db/models.py
+new file mode 100644
+index 0000000..80027dc
+--- /dev/null
++++ b/src/ev/db/models.py
+@@ -0,0 +1,73 @@
++"""Hi-EV SQLAlchemy ORM models."""
++
++import uuid
++from datetime import UTC, datetime
++
++from sqlalchemy import (
++    Boolean,
++    Column,
++    DateTime,
++    ForeignKey,
++    String,
++    Text,
++    UniqueConstraint,
++    Uuid,
++)
++
++from .base import Base
++
++
++def now_utc() -> datetime:
++    """Return the current UTC-aware datetime."""
++    return datetime.now(UTC)
++
++
++class Ingest(Base):
++    """Raw ingestion records with idempotency via (source, source_id)."""
++
++    __tablename__ = "ingest"
++    __table_args__ = (
++        UniqueConstraint("source", "source_id", name="uix_ingest_source_id"),
++    )
++
++    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
++    source = Column(String(64), nullable=False, index=True)
++    source_id = Column(String(512), nullable=False)
++    content_hash = Column(String(64), nullable=False, index=True)
++    content = Column(Text, nullable=True)
++    project_tag = Column(String(128), nullable=True, index=True)
++    privacy_level = Column(String(32), default="personal")
++    created_at = Column(DateTime(timezone=True), default=now_utc)
++    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
++
++
++class Project(Base):
++    """Structured project memory."""
++
++    __tablename__ = "projects"
++
++    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
++    name = Column(String(128), nullable=False, unique=True, index=True)
++    repo_url = Column(String(512), nullable=True)
++    goal = Column(Text, nullable=True)
++    current_phase = Column(String(128), nullable=True)
++    status = Column(String(32), default="active")
++    active = Column(Boolean, default=True)
++    repo_path = Column(String(512), nullable=True)
++    created_at = Column(DateTime(timezone=True), default=now_utc)
++    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
++
++
++class Event(Base):
++    """Episodic log of things that happened."""
++
++    __tablename__ = "events"
++
++    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
++    project_id = Column(
++        Uuid(as_uuid=True), ForeignKey("projects.id"), nullable=True
++    )
++    event_type = Column(String(64), nullable=False, index=True)
++    description = Column(Text, nullable=False)
++    source_url = Column(String(1024), nullable=True)
++    happened_at = Column(DateTime(timezone=True), default=now_utc)
+diff --git a/tests/conftest.py b/tests/conftest.py
+new file mode 100644
+index 0000000..494a339
+--- /dev/null
++++ b/tests/conftest.py
+@@ -0,0 +1,10 @@
++"""Shared pytest configuration for Hi-EV."""
++
++import os
++from pathlib import Path
++
++# Force tests to use an isolated async SQLite database so the suite can run
++# without a local Postgres server. Production code still defaults to Postgres
++# via ev.config.Settings.database_url.
++_TEST_DB_PATH = (Path(__file__).resolve().parent / "hiev_test.db").as_posix()
++os.environ["EV_DATABASE_URL"] = f"sqlite+aiosqlite:///{_TEST_DB_PATH}"
+diff --git a/tests/test_db.py b/tests/test_db.py
+new file mode 100644
+index 0000000..a9fbb10
+--- /dev/null
++++ b/tests/test_db.py
+@@ -0,0 +1,27 @@
++import pytest
++from sqlalchemy import select
++
++from ev.db.base import Base, SessionLocal, engine
++from ev.db.models import Event, Ingest, Project  # noqa: F401
++
++
++@pytest.fixture
++async def db_session():
++    async with engine.begin() as conn:
++        await conn.run_sync(Base.metadata.create_all)
++    async with SessionLocal() as session:
++        yield session
++    async with engine.begin() as conn:
++        await conn.run_sync(Base.metadata.drop_all)
++
++
++async def test_create_project(db_session):
++    p = Project(
++        name="RoboCAD",
++        repo_url="https://github.com/satyamdas03/RoboCAD",
++        current_phase="Phase 29",
++    )
++    db_session.add(p)
++    await db_session.commit()
++    result = await db_session.execute(select(Project).where(Project.name == "RoboCAD"))
++    assert result.scalar_one().current_phase == "Phase 29"

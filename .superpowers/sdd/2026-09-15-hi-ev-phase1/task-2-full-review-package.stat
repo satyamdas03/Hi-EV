@@ -1,0 +1,12 @@
+ .gitignore                                         |  1 +
+ .../sdd/2026-09-15-hi-ev-phase1/task-1-report.md   | 64 ++++++++++++++++++
+ alembic.ini                                        | 43 ++++++++++++
+ alembic/env.py                                     | 78 ++++++++++++++++++++++
+ alembic/script.py.mako                             | 26 ++++++++
+ pyproject.toml                                     |  1 +
+ src/ev/db/__init__.py                              |  6 ++
+ src/ev/db/base.py                                  | 30 +++++++++
+ src/ev/db/models.py                                | 73 ++++++++++++++++++++
+ tests/conftest.py                                  | 10 +++
+ tests/test_db.py                                   | 27 ++++++++
+ 11 files changed, 359 insertions(+)
