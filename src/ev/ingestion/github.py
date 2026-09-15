@@ -57,20 +57,28 @@ class GitHubIngestion(IngestionSource):
         resp = await client.get(url, params={"per_page": 10, "state": "all"})
         if resp.status_code != 200:
             return []
-        return [
-            self._record("github_issues", str(i["number"]), i.get("title", "") + "\n" + i.get("body", ""), repo)
-            for i in resp.json()
-        ]
+        records = []
+        for i in resp.json():
+            title = i.get("title", "")
+            body = i.get("body", "") or ""
+            state = i.get("state", "unknown")
+            content = f"{title}\nstate: {state}\n\n{body}"
+            records.append(self._record("github_issues", str(i["number"]), content, repo))
+        return records
 
     async def _fetch_prs(self, client: httpx.AsyncClient, repo: str) -> list[dict]:
         url = f"{self.BASE}/repos/{repo}/pulls"
         resp = await client.get(url, params={"per_page": 10, "state": "all"})
         if resp.status_code != 200:
             return []
-        return [
-            self._record("github_prs", str(p["number"]), p.get("title", "") + "\n" + p.get("body", ""), repo)
-            for p in resp.json()
-        ]
+        records = []
+        for p in resp.json():
+            title = p.get("title", "")
+            body = p.get("body", "") or ""
+            state = p.get("state", "unknown")
+            content = f"{title}\nstate: {state}\n\n{body}"
+            records.append(self._record("github_prs", str(p["number"]), content, repo))
+        return records
 
     def _record(self, source: str, source_id: str, content: str, repo: str) -> dict:
         content = content or ""

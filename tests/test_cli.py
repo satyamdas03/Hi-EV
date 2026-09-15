@@ -28,3 +28,11 @@ def test_status_command(seeded_store):
     assert result.exit_code == 0
     assert "RoboCAD" in result.output
     assert "Phase 29" in result.output
+
+
+def test_status_json_command(seeded_store):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["status", "RoboCAD", "--json"])
+    assert result.exit_code == 0
+    assert '"name": "RoboCAD"' in result.output
+    assert '"phase": "Phase 29"' in result.output

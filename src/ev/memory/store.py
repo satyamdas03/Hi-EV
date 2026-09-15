@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select, tuple_
+from sqlalchemy import desc, func, select, tuple_
 
 from ev.db.models import Event, Ingest, Project
 
@@ -58,6 +58,39 @@ class MemoryStore:
             self.session.add(project)
             await self.session.commit()
         return project
+
+    async def list_active_projects(self) -> list[Project]:
+        result = await self.session.execute(select(Project).where(Project.active == True))
+        return list(result.scalars().all())
+
+    async def _count_open_source(self, source: str, project_name: str) -> int:
+        tag = project_name.lower()
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(Ingest)
+            .where(
+                Ingest.source == source,
+                Ingest.project_tag == tag,
+                Ingest.content.ilike("%state: open%"),
+            )
+        )
+        return result.scalar_one() or 0
+
+    async def count_open_issues(self, project_name: str) -> int:
+        return await self._count_open_source("github_issues", project_name)
+
+    async def count_open_prs(self, project_name: str) -> int:
+        return await self._count_open_source("github_prs", project_name)
+
+    async def recent_notes(self, project_name: str, limit: int = 5) -> list[Ingest]:
+        tag = project_name.lower()
+        result = await self.session.execute(
+            select(Ingest)
+            .where(Ingest.source == "notes", Ingest.project_tag == tag)
+            .order_by(desc(Ingest.updated_at))
+            .limit(limit)
+        )
+        return list(result.scalars().all())
 
     async def add_event(self, project_name: str, event_type: str, description: str, source_url: str | None = None) -> Event:
         project = await self.get_or_create_project(project_name)
