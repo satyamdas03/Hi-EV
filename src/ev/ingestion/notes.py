@@ -25,7 +25,7 @@ class NotesIngestion(IngestionSource):
                 work_domains=["financialsimplicity.com"],
             )
 
-    def ingest(self) -> list[dict[str, Any]]:
+    async def ingest(self) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         if not self.root.exists():
             return records
