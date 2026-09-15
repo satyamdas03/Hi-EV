@@ -1,6 +1,6 @@
 import pytest
-from ev.config import Settings
-from ev.db.base import Base, engine, SessionLocal
+
+from ev.db.base import Base, SessionLocal, engine
 from ev.memory.store import MemoryStore
 
 

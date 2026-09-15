@@ -1,7 +1,8 @@
 import pytest
 from click.testing import CliRunner
+
 from ev.cli.main import cli
-from ev.db.base import Base, engine, SessionLocal
+from ev.db.base import Base, SessionLocal, engine
 from ev.memory.store import MemoryStore
 
 

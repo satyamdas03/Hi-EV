@@ -4,7 +4,7 @@ from httpx import ASGITransport, AsyncClient
 
 @pytest.fixture
 async def seeded_db():
-    from ev.db.base import Base, engine, SessionLocal
+    from ev.db.base import Base, SessionLocal, engine
     from ev.memory.store import MemoryStore
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

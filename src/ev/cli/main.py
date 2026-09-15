@@ -4,7 +4,6 @@ import asyncio
 
 import click
 
-from ev.config import get_settings
 from ev.db.base import SessionLocal
 from ev.memory.store import MemoryStore
 from ev.tools.registry import ToolRegistry
@@ -14,7 +13,6 @@ from ev.tools.status_tool import StatusTool
 @click.group()
 def cli():
     """Hi-EV — personal AI operating system."""
-    pass
 
 
 @cli.command()
@@ -22,7 +20,6 @@ def cli():
 def status(project: str):
     """Show a one-paragraph status update for PROJECT."""
     async def _run():
-        settings = get_settings()
         async with SessionLocal() as session:
             store = MemoryStore(session)
             registry = ToolRegistry(store)

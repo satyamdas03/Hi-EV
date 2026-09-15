@@ -1,7 +1,8 @@
 import pytest
-from ev.db.base import Base, engine, SessionLocal
-from ev.memory.store import MemoryStore
+
+from ev.db.base import Base, SessionLocal, engine
 from ev.memory.status import build_status_summary
+from ev.memory.store import MemoryStore
 
 
 @pytest.fixture

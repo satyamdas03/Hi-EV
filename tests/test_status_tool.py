@@ -1,5 +1,6 @@
 import pytest
-from ev.db.base import Base, engine, SessionLocal
+
+from ev.db.base import Base, SessionLocal, engine
 from ev.memory.store import MemoryStore
 from ev.tools.registry import ToolRegistry
 from ev.tools.status_tool import StatusTool
