@@ -24,9 +24,14 @@ def _parse_datetime(value: dict) -> datetime | None:
 
 
 class CalendarIngestion(IngestionSource):
-    """Ingest personal Google Calendar events read-only and extract deadlines."""
+    """Ingest personal Google Calendar events read-only and extract deadlines, people, obligations."""
 
-    def __init__(self, config: Settings, service: Any | None = None):
+    def __init__(
+        self,
+        config: Settings,
+        service: Any | None = None,
+        project_tags: list[str] | None = None,
+    ):
         assert_personal_only(config)
         if not config.google_enabled:
             raise RuntimeError("Calendar ingestion disabled; set EV_GOOGLE_ENABLED=true")
@@ -35,10 +40,13 @@ class CalendarIngestion(IngestionSource):
             from ev.google_auth import GoogleAuthHelper
 
             self.service = GoogleAuthHelper(config).get_service("calendar", "v3")
+        self.project_tags = [tag.lower() for tag in (project_tags or [])]
 
-    async def ingest(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    async def ingest(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         records: list[dict[str, Any]] = []
         deadlines: list[dict[str, Any]] = []
+        people: list[dict[str, Any]] = []
+        obligations: list[dict[str, Any]] = []
         now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         events_result = self.service.events().list(
             calendarId="primary",
@@ -49,13 +57,14 @@ class CalendarIngestion(IngestionSource):
         ).execute()
         for event in events_result.get("items", []):
             content = self._format_event(event)
+            project_tag = self._guess_project_tag(content)
             records.append(
                 {
                     "source": "calendar_events",
                     "source_id": event.get("id", ""),
                     "content_hash": _hash(content),
                     "content": content,
-                    "project_tag": self._guess_project_tag(content),
+                    "project_tag": project_tag,
                     "privacy_level": "sensitive",
                 }
             )
@@ -68,10 +77,27 @@ class CalendarIngestion(IngestionSource):
                         "source": "calendar",
                         "source_id": event.get("id", ""),
                         "priority": "high" if self._is_deadline_like(event) else "medium",
-                        "project_name": self._guess_project_tag(content),
+                        "project_name": project_tag,
                     }
                 )
-        return records, deadlines
+                if self._is_obligation_like(event):
+                    obligations.append(
+                        {
+                            "title": f"Prepare for: {event.get('summary', 'meeting')}",
+                            "description": event.get("description", ""),
+                            "due_date": due,
+                            "source": "calendar",
+                            "source_id": f"obl:{event.get('id', '')}",
+                            "project_name": project_tag,
+                            "status": "open",
+                        }
+                    )
+            for attendee in event.get("attendees", []):
+                person = self._extract_person(attendee)
+                if person:
+                    people.append(person)
+
+        return records, deadlines, people, obligations
 
     def _format_event(self, event: dict) -> str:
         lines = [f"Event: {event.get('summary', '')}"]
@@ -93,9 +119,30 @@ class CalendarIngestion(IngestionSource):
         keywords = ["deadline", "due", "file", "submit", "payment", "patent"]
         return any(k in summary for k in keywords)
 
+    def _is_obligation_like(self, event: dict) -> bool:
+        summary = (event.get("summary", "") or "").lower()
+        keywords = ["review", "sync", "prep", "follow-up", "action", "respond", "send", "draft", "meet", "call"]
+        return any(k in summary for k in keywords)
+
     def _guess_project_tag(self, content: str) -> str | None:
         lower = content.lower()
+        for tag in self.project_tags:
+            if tag in lower:
+                return tag
         for keyword in ["robocad", "learningrobotics", "neuralquant", "hi-ev", "patent"]:
             if keyword in lower:
                 return keyword
         return None
+
+    def _extract_person(self, attendee: dict) -> dict[str, Any] | None:
+        email = (attendee.get("email") or "").strip().lower()
+        if not email or "@" not in email:
+            return None
+        name = attendee.get("displayName")
+        return {
+            "email": email,
+            "name": name,
+            "source": "calendar",
+            "source_id": email,
+            "last_contact_at": datetime.now(UTC),
+        }

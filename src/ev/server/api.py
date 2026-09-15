@@ -1,6 +1,9 @@
 """Hi-EV internal FastAPI daemon."""
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -8,20 +11,74 @@ from pydantic import BaseModel
 from ev.config import get_settings
 from ev.db.base import SessionLocal
 from ev.memory.store import MemoryStore
+from ev.tools.alerts_tool import AlertsTool
 from ev.tools.brief_tool import BriefTool
 from ev.tools.calendar_prep_tool import CalendarPrepTool
 from ev.tools.draft_tools import DraftCommitTool, DraftPrTool, DraftReplyTool
+from ev.tools.obligations_tool import ObligationsTool
+from ev.tools.people_tool import PeopleTool
+from ev.tools.prep_tool import PrepTool
 from ev.tools.registry import ToolRegistry
 from ev.tools.research_tool import ResearchTool
 from ev.tools.status_tool import StatusTool
 from ev.tools.work_tool import WorkTool
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.settings = settings
-    yield {}
+    alert_task = asyncio.create_task(_alert_loop(settings))
+    try:
+        yield {}
+    finally:
+        alert_task.cancel()
+        try:
+            await alert_task
+        except asyncio.CancelledError:
+            pass
+
+
+async def _alert_loop(settings):
+    """Background loop that emits urgent deadline digests."""
+    from ev.tools.deadline_watcher import DeadlineWatcherTool
+
+    while True:
+        try:
+            await asyncio.sleep(settings.alert_interval_sec)
+        except asyncio.CancelledError:
+            break
+        if settings.kill_switch:
+            continue
+        if _in_quiet_hours(settings.quiet_start, settings.quiet_end):
+            continue
+
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            watcher = DeadlineWatcherTool(urgent_hours=settings.alert_window_hours)
+            watcher.bind_store(store)
+            result = await watcher.run()
+            urgent = result["urgent"]
+            if not urgent:
+                continue
+            print(f"[EV ALERT] {result['counts']['urgent']} urgent deadline(s). Overdue: {result['counts']['overdue']}")
+            for item in urgent:
+                try:
+                    from uuid import UUID
+                    await store.mark_deadline_reminded(UUID(item["id"]))
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Failed to mark deadline reminded: %s", exc)
+
+
+def _in_quiet_hours(start: str, end: str) -> bool:
+    now = datetime.now(UTC).time()
+    start_t = datetime.strptime(start, "%H:%M").time()  # noqa: DTZ007
+    end_t = datetime.strptime(end, "%H:%M").time()  # noqa: DTZ007
+    if start_t < end_t:
+        return start_t <= now <= end_t
+    return now >= start_t or now <= end_t
 
 
 app = FastAPI(title="EV Daemon API", lifespan=lifespan)
@@ -50,6 +107,19 @@ class DraftRequest(BaseModel):
 
 class CalendarPrepRequest(BaseModel):
     time: str
+
+
+class PrepRequest(BaseModel):
+    title: str | None = None
+    project: str | None = None
+    time: str | None = None
+
+
+class ListFilterRequest(BaseModel):
+    project: str | None = None
+    status: str | None = None
+    overdue: bool = False
+    limit: int = 50
 
 
 @app.post("/status")
@@ -124,6 +194,67 @@ async def calendar_prep_endpoint(req: CalendarPrepRequest):
         registry = ToolRegistry(store)
         registry.register(CalendarPrepTool())
         result = await registry.get("calendar_prep").run(time=req.time)
+        return result
+
+
+@app.post("/deadlines")
+async def deadlines_endpoint(req: ListFilterRequest):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        registry = ToolRegistry(store)
+        from ev.tools.deadline_watcher import DeadlineWatcherTool
+
+        registry.register(DeadlineWatcherTool())
+        result = await registry.get("deadline_watcher").run(project_name=req.project)
+        return result
+
+
+@app.post("/people")
+async def people_endpoint(req: ListFilterRequest):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        registry = ToolRegistry(store)
+        registry.register(PeopleTool())
+        result = await registry.get("people").run(project_name=req.project, limit=req.limit)
+        return result
+
+
+@app.post("/obligations")
+async def obligations_endpoint(req: ListFilterRequest):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        registry = ToolRegistry(store)
+        registry.register(ObligationsTool())
+        result = await registry.get("obligations").run(
+            project_name=req.project,
+            status=req.status,
+            overdue=req.overdue,
+        )
+        return result
+
+
+@app.post("/alerts")
+async def alerts_endpoint(req: ListFilterRequest | None = None):
+    project = req.project if req else None
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        registry = ToolRegistry(store)
+        registry.register(AlertsTool())
+        result = await registry.get("alerts").run(project_name=project)
+        return result
+
+
+@app.post("/prep")
+async def prep_endpoint(req: PrepRequest):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        registry = ToolRegistry(store)
+        registry.register(PrepTool())
+        result = await registry.get("prep").run(
+            title=req.title,
+            project_name=req.project,
+            time=req.time,
+        )
         return result
 
 

@@ -85,9 +85,77 @@ class Deadline(Base):
     title = Column(String(512), nullable=False)
     due_date = Column(DateTime(timezone=True), nullable=True)
     priority = Column(String(32), default="medium")
+    status = Column(String(32), default="open")
+    snooze_until = Column(DateTime(timezone=True), nullable=True)
     source = Column(String(64), nullable=False, index=True)
     source_id = Column(String(512), nullable=False)
     project_name = Column(String(128), nullable=True, index=True)
     last_reminded = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class Person(Base):
+    """People EV learns about from Gmail, Calendar, and manual captures."""
+
+    __tablename__ = "people"
+    __table_args__ = (
+        UniqueConstraint("email", name="uix_person_email"),
+    )
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(256), nullable=False, unique=True, index=True)
+    name = Column(String(256), nullable=True)
+    source = Column(String(64), nullable=False, index=True)
+    source_id = Column(String(512), nullable=True)
+    notes = Column(Text, nullable=True)
+    last_contact_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class Obligation(Base):
+    """Things owed or expected between people/projects."""
+
+    __tablename__ = "obligations"
+    __table_args__ = (
+        UniqueConstraint("source", "source_id", name="uix_obligation_source_id"),
+    )
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(512), nullable=False)
+    description = Column(Text, nullable=True)
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(32), default="open")
+    snooze_until = Column(DateTime(timezone=True), nullable=True)
+    project_name = Column(String(128), nullable=True, index=True)
+    owed_by_person_id = Column(
+        Uuid(as_uuid=True), ForeignKey("people.id"), nullable=True
+    )
+    owed_to_person_id = Column(
+        Uuid(as_uuid=True), ForeignKey("people.id"), nullable=True
+    )
+    source = Column(String(64), nullable=False, index=True)
+    source_id = Column(String(512), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class Decision(Base):
+    """Recorded decisions with rationale."""
+
+    __tablename__ = "decisions"
+    __table_args__ = (
+        UniqueConstraint("source", "source_id", name="uix_decision_source_id"),
+    )
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    topic = Column(String(512), nullable=False)
+    decision_text = Column(Text, nullable=False)
+    rationale = Column(Text, nullable=True)
+    made_at = Column(DateTime(timezone=True), default=now_utc)
+    project_name = Column(String(128), nullable=True, index=True)
+    source = Column(String(64), nullable=False, index=True)
+    source_id = Column(String(512), nullable=False)
     created_at = Column(DateTime(timezone=True), default=now_utc)
     updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)

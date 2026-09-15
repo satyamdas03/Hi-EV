@@ -1,6 +1,8 @@
 """Read-only Gmail ingestion source."""
 
 import hashlib
+import re
+from datetime import UTC, datetime
 from typing import Any
 
 from ev.config import Settings
@@ -21,9 +23,14 @@ def _header(headers: list[dict], name: str) -> str:
 
 
 class GmailIngestion(IngestionSource):
-    """Ingest personal Gmail messages read-only."""
+    """Ingest personal Gmail messages read-only and extract people."""
 
-    def __init__(self, config: Settings, service: Any | None = None):
+    def __init__(
+        self,
+        config: Settings,
+        service: Any | None = None,
+        project_tags: list[str] | None = None,
+    ):
         assert_personal_only(config)
         if not config.google_enabled:
             raise RuntimeError("Gmail ingestion disabled; set EV_GOOGLE_ENABLED=true")
@@ -36,6 +43,7 @@ class GmailIngestion(IngestionSource):
             work_handles=["financialsimplicity"],
             work_domains=["financialsimplicity.com"],
         )
+        self.project_tags = [tag.lower() for tag in (project_tags or [])]
 
     def _extract_text(self, message: dict) -> str:
         snippet = message.get("snippet", "")
@@ -78,8 +86,39 @@ class GmailIngestion(IngestionSource):
                         pass
         return "\n".join(texts)
 
-    async def ingest(self) -> list[dict[str, Any]]:
+    def _extract_person(self, from_header: str) -> dict[str, Any] | None:
+        if not from_header:
+            return None
+        match = re.match(r'^(.*?)\s*<([^@>]+@[^@>]+)\s*>\s*$', from_header)
+        if match:
+            name = match.group(1).strip().strip('"').strip("'")
+            email = match.group(2).strip().lower()
+        else:
+            email = from_header.strip().lower()
+            name = None
+        if "@" not in email:
+            return None
+        return {
+            "email": email,
+            "name": name,
+            "source": "gmail",
+            "source_id": email,
+            "last_contact_at": datetime.now(UTC),
+        }
+
+    def _guess_project_tag(self, content: str) -> str | None:
+        lower = content.lower()
+        for tag in self.project_tags:
+            if tag in lower:
+                return tag
+        for keyword in ["patent"]:
+            if keyword in lower:
+                return keyword
+        return None
+
+    async def ingest(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         records: list[dict[str, Any]] = []
+        people: list[dict[str, Any]] = []
         response = self.service.users().messages().list(userId="me", labelIds=["INBOX"], maxResults=20).execute()
         messages = response.get("messages", [])
         for msg_meta in messages:
@@ -88,6 +127,9 @@ class GmailIngestion(IngestionSource):
             sender = _header(headers, "From")
             if self.blocklist.is_blocked_account(sender):
                 continue
+            person = self._extract_person(sender)
+            if person:
+                people.append(person)
             content = self._extract_text(message)
             records.append(
                 {
@@ -99,11 +141,4 @@ class GmailIngestion(IngestionSource):
                     "privacy_level": "sensitive",
                 }
             )
-        return records
-
-    def _guess_project_tag(self, content: str) -> str | None:
-        lower = content.lower()
-        for keyword in ["robocad", "learningrobotics", "neuralquant", "hi-ev", "patent"]:
-            if keyword in lower:
-                return keyword if keyword != "patent" else "patent"
-        return None
+        return records, people

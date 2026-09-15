@@ -55,5 +55,15 @@ class BriefTool(Tool):
                 line += " (stale)"
             lines.append(line)
 
+        # Global standalone deadlines (not attributed to a specific project)
+        standalone_total = await self.store.count_urgent_deadlines(hours=30 * 24)
+        urgent_global = await self.store.count_urgent_deadlines(hours=72)
+        if standalone_total:
+            lines.append("")
+            lines.append(
+                f"EV also sees {standalone_total} upcoming standalone deadline(s)"
+                + (f" ({urgent_global} in the next 3 days)." if urgent_global else ".")
+            )
+
         header = f"EV brief — {len(projects)} active project(s):"
         return "\n".join([header, *lines])

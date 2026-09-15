@@ -22,19 +22,27 @@ async def main():
 
     async with SessionLocal() as session:
         store = MemoryStore(session)
+        projects = await store.list_active_projects()
+        project_tags = [p.name for p in projects]
 
         # Gmail
-        gmail = GmailIngestion(settings)
-        gmail_records = await gmail.ingest()
+        gmail = GmailIngestion(settings, project_tags=project_tags)
+        gmail_records, gmail_people = await gmail.ingest()
         ingested_gmail = await store.upsert_ingest(gmail_records)
-        print(f"Ingested {ingested_gmail} Gmail messages")
+        ingested_gmail_people = await store.upsert_people(gmail_people)
+        print(f"Ingested {ingested_gmail} Gmail messages and {ingested_gmail_people} people")
 
         # Calendar
-        calendar = CalendarIngestion(settings)
-        calendar_records, deadlines = await calendar.ingest()
+        calendar = CalendarIngestion(settings, project_tags=project_tags)
+        calendar_records, deadlines, calendar_people, obligations = await calendar.ingest()
         ingested_calendar = await store.upsert_ingest(calendar_records)
         ingested_deadlines = await store.upsert_deadlines(deadlines)
-        print(f"Ingested {ingested_calendar} calendar events and {ingested_deadlines} deadlines")
+        ingested_calendar_people = await store.upsert_people(calendar_people)
+        ingested_obligations = await store.upsert_obligations(obligations)
+        print(
+            f"Ingested {ingested_calendar} calendar events, {ingested_deadlines} deadlines, "
+            f"{ingested_calendar_people} people, {ingested_obligations} obligations"
+        )
 
     print("Google sync complete.")
 

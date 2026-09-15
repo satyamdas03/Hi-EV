@@ -79,13 +79,16 @@ async def test_gmail_ingestion_reads_and_never_writes():
     from ev.ingestion.gmail import GmailIngestion
     service = _gmail_service()
     ingester = GmailIngestion(Settings(personal_only=True, google_enabled=True), service=service)
-    records = await ingester.ingest()
+    records, people = await ingester.ingest()
     assert len(records) == 1
     assert records[0]["source"] == "gmail_messages"
     assert records[0]["source_id"] == "m1"
     assert records[0]["content_hash"]
     assert records[0]["privacy_level"] == "sensitive"
     assert "Catch up" in records[0]["content"]
+
+    assert len(people) == 1
+    assert people[0]["email"] == "friend@example.com"
 
     # No destructive or send calls
     assert not service.users.return_value.messages.return_value.send.called
@@ -99,8 +102,23 @@ async def test_gmail_ingestion_skips_work_senders():
     response = service.users.return_value.messages.return_value.get.return_value
     response.execute.return_value["payload"]["headers"][0]["value"] = "boss@financialsimplicity.com"
     ingester = GmailIngestion(Settings(personal_only=True, google_enabled=True), service=service)
-    records = await ingester.ingest()
+    records, people = await ingester.ingest()
     assert records == []
+    assert people == []
+
+
+async def test_gmail_ingestion_uses_project_tags():
+    from ev.ingestion.gmail import GmailIngestion
+    service = _gmail_service()
+    response = service.users.return_value.messages.return_value.get.return_value
+    response.execute.return_value["payload"]["headers"][1]["value"] = "RoboCAD actuator review"
+    ingester = GmailIngestion(
+        Settings(personal_only=True, google_enabled=True),
+        service=service,
+        project_tags=["RoboCAD", "Hi-EV"],
+    )
+    records, _people = await ingester.ingest()
+    assert records[0]["project_tag"] == "robocad"
 
 
 async def test_calendar_ingestion_personal_only(store):
@@ -119,7 +137,7 @@ async def test_calendar_ingestion_extracts_events_and_deadlines():
     from ev.ingestion.calendar import CalendarIngestion
     service = _calendar_service()
     ingester = CalendarIngestion(Settings(personal_only=True, google_enabled=True), service=service)
-    records, deadlines = await ingester.ingest()
+    records, deadlines, people, obligations = await ingester.ingest()
     assert len(records) == 1
     assert records[0]["source"] == "calendar_events"
     assert records[0]["source_id"] == "e1"
@@ -130,6 +148,9 @@ async def test_calendar_ingestion_extracts_events_and_deadlines():
     assert deadlines[0]["title"] == "Patent filing due"
     assert deadlines[0]["source"] == "calendar"
     assert deadlines[0]["source_id"] == "e1"
+
+    assert len(people) == 0
+    assert len(obligations) == 0  # "Patent" is deadline-like, not obligation-like
 
     # No create/update/delete calls
     assert not service.events.return_value.insert.called

@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     learningrobotics_path: Path | None = None
     hiev_path: Path | None = None
 
+    # Alert loop / quiet hours
+    alert_interval_sec: int = 900
+    alert_window_hours: int = 72
+    quiet_start: str = "22:00"
+    quiet_end: str = "08:00"
+    kill_switch: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:
