@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     github_token: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
+    nvidia_api_key: SecretStr | None = None
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    llm_provider: str = "nvidia"
+    llm_model: str = "meta/llama-3.3-70b-instruct"
+    google_enabled: bool = False
+    google_credentials_path: Path | None = None
 
 
 @lru_cache
