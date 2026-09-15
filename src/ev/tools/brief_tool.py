@@ -41,6 +41,8 @@ class BriefTool(Tool):
                 line += f" {summary['open_pr_count']} open PR(s)."
             if summary["recent_note_count"]:
                 line += f" {summary['recent_note_count']} recent note(s)."
+            if summary.get("upcoming_deadline_count"):
+                line += f" {summary['upcoming_deadline_count']} upcoming deadline(s)."
 
             last = summary.get("last_activity")
             is_stale = True

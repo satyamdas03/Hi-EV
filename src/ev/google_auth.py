@@ -25,7 +25,7 @@ def _credentials_path(config: Settings) -> Path | None:
 
 
 def _token_path(credentials_path: Path) -> Path:
-    return credentials_path.with_suffix(".token.json")
+    return credentials_path.parent / "token.json"
 
 
 def _load_or_create_credentials(credentials_path: Path):

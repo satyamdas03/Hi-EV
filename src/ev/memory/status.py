@@ -4,7 +4,7 @@ import re
 
 from sqlalchemy import desc, select
 
-from ev.db.models import Ingest, Project
+from ev.db.models import Deadline, Ingest, Project
 
 _PHASE_RE = re.compile(r"(?i)\bphase\s+(\d+[A-Z]?)\b")
 
@@ -35,7 +35,10 @@ async def build_status_summary(store, project_name: str) -> dict:
     open_issue_count = await store.count_open_issues(project_name)
     open_pr_count = await store.count_open_prs(project_name)
     recent_note_count = len(await store.recent_notes(project_name, limit=5))
-    summary_text = _make_summary_text(project, phase, commits, open_issue_count, open_pr_count, recent_note_count)
+    deadline_count = await _count_upcoming_deadlines(store, project_name)
+    summary_text = _make_summary_text(
+        project, phase, commits, open_issue_count, open_pr_count, recent_note_count, deadline_count
+    )
 
     return {
         "name": project.name,
@@ -47,9 +50,23 @@ async def build_status_summary(store, project_name: str) -> dict:
         "open_issue_count": open_issue_count,
         "open_pr_count": open_pr_count,
         "recent_note_count": recent_note_count,
+        "upcoming_deadline_count": deadline_count,
         "last_activity": latest.isoformat() if latest else None,
         "summary_text": summary_text,
     }
+
+
+async def _count_upcoming_deadlines(store, project_name: str) -> int:
+    from datetime import UTC, datetime
+
+    tag = project_name.lower()
+    stmt = (
+        select(Deadline)
+        .where(Deadline.project_name == tag)
+        .where(Deadline.due_date >= datetime.now(UTC))
+    )
+    result = await store.session.execute(stmt)
+    return len(result.scalars().all())
 
 
 def _infer_phase(commits: list[Ingest], notes: list[Ingest]) -> str | None:
@@ -60,7 +77,15 @@ def _infer_phase(commits: list[Ingest], notes: list[Ingest]) -> str | None:
     return None
 
 
-def _make_summary_text(project, phase, commits, open_issue_count: int, open_pr_count: int, recent_note_count: int):
+def _make_summary_text(
+    project,
+    phase,
+    commits,
+    open_issue_count: int,
+    open_pr_count: int,
+    recent_note_count: int,
+    upcoming_deadline_count: int = 0,
+):
     parts = [f"{project.name} is at {phase or 'unknown phase'}."]
     if commits:
         parts.append(f"Latest commit: {commits[0].content.splitlines()[0][:80]}.")
@@ -70,4 +95,6 @@ def _make_summary_text(project, phase, commits, open_issue_count: int, open_pr_c
         parts.append(f"{open_pr_count} open PR(s).")
     if recent_note_count:
         parts.append(f"{recent_note_count} recent note(s).")
+    if upcoming_deadline_count:
+        parts.append(f"{upcoming_deadline_count} upcoming deadline(s).")
     return " ".join(parts)
