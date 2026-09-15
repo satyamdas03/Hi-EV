@@ -102,7 +102,7 @@ Add `.env` values and OAuth files only; never paste them into code or memory fil
 
 **Phase 3 is complete and pushed.** Real-time Google sync is live and Phase 3 structured-memory features are implemented.
 
-Latest commit: `9d4fdb4`.
+Latest commit: `04b1b89`.
 Key prior commits:
 - `0ce429f` — Phase 3 plan.
 - `6b1e0c4` — session recovery dossier mirror.
