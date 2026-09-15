@@ -35,6 +35,9 @@ dev = [
 [project.scripts]
 ev = "ev.cli.main:cli"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/ev"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["src"]
