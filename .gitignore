@@ -151,6 +151,9 @@ secrets/
 config/local*.yaml
 config/secrets*.yaml
 
+# Source package overrides
+!src/ev/memory/
+
 # Vector / model cache
 models/
 cache/
