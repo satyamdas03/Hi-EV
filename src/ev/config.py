@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://localhost:5432/hiev"
     redis_url: str = "redis://localhost:6379/0"
     personal_only: bool = Field(default=True)
-    notes_path: PurePosixPath = Field(default=PurePosixPath(Path.home() / "notes"))
+    notes_path: PurePosixPath | Path = Field(default=PurePosixPath(Path.home() / "notes"))
     github_token: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
