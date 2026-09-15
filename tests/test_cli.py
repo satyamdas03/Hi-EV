@@ -36,3 +36,11 @@ def test_status_json_command(seeded_store):
     assert result.exit_code == 0
     assert '"name": "RoboCAD"' in result.output
     assert '"phase": "Phase 29"' in result.output
+
+
+def test_brief_command(seeded_store):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["brief"])
+    assert result.exit_code == 0
+    assert "RoboCAD" in result.output
+    assert "active project" in result.output.lower()

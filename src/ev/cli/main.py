@@ -9,6 +9,7 @@ from ev.db.base import SessionLocal
 from ev.memory.status import build_status_summary
 from ev.memory.store import MemoryStore
 from ev.tools.registry import ToolRegistry
+from ev.tools.brief_tool import BriefTool
 from ev.tools.status_tool import StatusTool
 
 
@@ -33,5 +34,19 @@ def status(project: str, json_output: bool):
                 registry.register(StatusTool())
                 result = await registry.get("status").run(project=project)
                 click.echo(result)
+
+    asyncio.run(_run())
+
+
+@cli.command()
+def brief():
+    """Show a cross-project status brief."""
+    async def _run():
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            registry = ToolRegistry(store)
+            registry.register(BriefTool())
+            result = await registry.get("brief").run()
+            click.echo(result)
 
     asyncio.run(_run())

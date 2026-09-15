@@ -26,3 +26,13 @@ async def test_status_endpoint(seeded_db):
         response = await client.post("/status", json={"project": "RoboCAD"})
         assert response.status_code == 200
         assert "RoboCAD" in response.json()["summary"]
+
+
+async def test_brief_endpoint(seeded_db):
+    from ev.server.api import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/brief")
+        assert response.status_code == 200
+        data = response.json()
+        assert "RoboCAD" in data["brief"]
+        assert "active project" in data["brief"].lower()

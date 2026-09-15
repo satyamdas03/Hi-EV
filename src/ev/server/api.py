@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from ev.config import get_settings
 from ev.db.base import SessionLocal
 from ev.memory.store import MemoryStore
+from ev.tools.brief_tool import BriefTool
 from ev.tools.registry import ToolRegistry
 from ev.tools.status_tool import StatusTool
 
@@ -34,6 +35,16 @@ async def status_endpoint(req: StatusRequest):
         registry.register(StatusTool())
         summary = await registry.get("status").run(project=req.project)
         return {"summary": summary}
+
+
+@app.post("/brief")
+async def brief_endpoint():
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        registry = ToolRegistry(store)
+        registry.register(BriefTool())
+        brief_text = await registry.get("brief").run()
+        return {"brief": brief_text}
 
 
 @app.get("/health")
