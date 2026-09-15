@@ -11,7 +11,7 @@ async def seeded_db():
         await conn.run_sync(Base.metadata.create_all)
     async with SessionLocal() as session:
         store = MemoryStore(session)
-        await store.get_or_create_project("RoboCAD", current_phase="Phase 29")
+        await store.get_or_create_project("RoboCAD", current_phase="Phase 29", repo_path="/repos/RoboCAD")
         await store.upsert_ingest([{
             "source": "github_commits", "source_id": "RoboCAD:sha1", "content_hash": "h1",
             "content": "feat: deliver Phase 29", "project_tag": "robocad", "privacy_level": "personal"
@@ -37,6 +37,24 @@ async def test_brief_endpoint(seeded_db):
         data = response.json()
         assert "RoboCAD" in data["brief"]
         assert "active project" in data["brief"].lower()
+
+
+@patch("ev.tools.work_tool.subprocess.Popen")
+async def test_work_endpoint(mock_popen, seeded_db):
+    from ev.server.api import app
+    process = MagicMock()
+    process.stdin = MagicMock()
+    process.stdout = MagicMock()
+    process.stderr = MagicMock()
+    process.pid = 1234
+    mock_popen.return_value = process
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/work", json={"project": "RoboCAD", "task": "fix test"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["project"] == "RoboCAD"
+        assert data["pid"] == 1234
 
 
 @patch("ev.research.search.httpx.AsyncClient")

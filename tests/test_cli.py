@@ -14,7 +14,7 @@ async def seeded_store():
         await conn.run_sync(Base.metadata.create_all)
     async with SessionLocal() as session:
         store = MemoryStore(session)
-        await store.get_or_create_project("RoboCAD", current_phase="Phase 29")
+        await store.get_or_create_project("RoboCAD", current_phase="Phase 29", repo_path="/repos/RoboCAD")
         await store.upsert_ingest([{
             "source": "github_commits", "source_id": "RoboCAD:sha1", "content_hash": "h1",
             "content": "feat: deliver Phase 29", "project_tag": "robocad", "privacy_level": "personal"
@@ -46,6 +46,23 @@ def test_brief_command(seeded_store):
     assert result.exit_code == 0
     assert "RoboCAD" in result.output
     assert "active project" in result.output.lower()
+
+
+@patch("ev.tools.work_tool.subprocess.Popen")
+def test_work_command(mock_popen, seeded_store):
+    process = MagicMock()
+    process.stdin = MagicMock()
+    process.stdout = MagicMock()
+    process.stderr = MagicMock()
+    process.pid = 1234
+    mock_popen.return_value = process
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["work", "on", "fix failing test in Phase 29", "--project", "RoboCAD"])
+    assert result.exit_code == 0
+    assert "RoboCAD" in result.output
+    assert "1234" in result.output
+    mock_popen.assert_called_once()
 
 
 @patch("ev.research.search.httpx.AsyncClient")

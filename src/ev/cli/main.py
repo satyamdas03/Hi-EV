@@ -12,6 +12,7 @@ from ev.tools.registry import ToolRegistry
 from ev.tools.brief_tool import BriefTool
 from ev.tools.research_tool import ResearchTool
 from ev.tools.status_tool import StatusTool
+from ev.tools.work_tool import WorkTool
 
 
 @click.group()
@@ -68,5 +69,30 @@ def research(query: str):
                 click.echo("\nSources:")
                 for idx, source in enumerate(result["sources"], 1):
                     click.echo(f"  [{idx}] {source['title']} — {source['url']}")
+
+    asyncio.run(_run())
+
+
+@cli.group()
+def work():
+    """Start a focused work session."""
+
+
+@work.command()
+@click.argument("task")
+@click.option("--project", required=True, help="Project to work on")
+def on(task: str, project: str):
+    """Spawn Claude Code in PROJECT with TASK context."""
+    async def _run():
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            registry = ToolRegistry(store)
+            registry.register(WorkTool())
+            result = await registry.get("work_on").run(project=project, task=task)
+            if "error" in result:
+                click.echo(f"EV: {result['error']}", err=True)
+                raise click.ClickException(result["error"])
+            click.echo(f"Spawned Claude Code for {result['project']} (pid {result['pid']}):")
+            click.echo(result["context_preview"])
 
     asyncio.run(_run())

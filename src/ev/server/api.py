@@ -12,6 +12,7 @@ from ev.tools.brief_tool import BriefTool
 from ev.tools.registry import ToolRegistry
 from ev.tools.research_tool import ResearchTool
 from ev.tools.status_tool import StatusTool
+from ev.tools.work_tool import WorkTool
 
 
 @asynccontextmanager
@@ -30,6 +31,11 @@ class StatusRequest(BaseModel):
 
 class ResearchRequest(BaseModel):
     query: str
+
+
+class WorkRequest(BaseModel):
+    project: str
+    task: str
 
 
 @app.post("/status")
@@ -59,6 +65,16 @@ async def research_endpoint(req: ResearchRequest):
         registry = ToolRegistry(store)
         registry.register(ResearchTool())
         result = await registry.get("research").run(query=req.query)
+        return result
+
+
+@app.post("/work")
+async def work_endpoint(req: WorkRequest):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        registry = ToolRegistry(store)
+        registry.register(WorkTool())
+        result = await registry.get("work_on").run(project=req.project, task=req.task)
         return result
 
 
