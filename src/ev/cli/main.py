@@ -10,6 +10,7 @@ from ev.memory.status import build_status_summary
 from ev.memory.store import MemoryStore
 from ev.tools.registry import ToolRegistry
 from ev.tools.brief_tool import BriefTool
+from ev.tools.research_tool import ResearchTool
 from ev.tools.status_tool import StatusTool
 
 
@@ -48,5 +49,24 @@ def brief():
             registry.register(BriefTool())
             result = await registry.get("brief").run()
             click.echo(result)
+
+    asyncio.run(_run())
+
+
+@cli.command()
+@click.argument("query")
+def research(query: str):
+    """Search the web and synthesize a cited answer for QUERY."""
+    async def _run():
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            registry = ToolRegistry(store)
+            registry.register(ResearchTool())
+            result = await registry.get("research").run(query=query)
+            click.echo(result["answer"])
+            if result["sources"]:
+                click.echo("\nSources:")
+                for idx, source in enumerate(result["sources"], 1):
+                    click.echo(f"  [{idx}] {source['title']} — {source['url']}")
 
     asyncio.run(_run())

@@ -10,6 +10,7 @@ from ev.db.base import SessionLocal
 from ev.memory.store import MemoryStore
 from ev.tools.brief_tool import BriefTool
 from ev.tools.registry import ToolRegistry
+from ev.tools.research_tool import ResearchTool
 from ev.tools.status_tool import StatusTool
 
 
@@ -25,6 +26,10 @@ app = FastAPI(title="EV Daemon API", lifespan=lifespan)
 
 class StatusRequest(BaseModel):
     project: str
+
+
+class ResearchRequest(BaseModel):
+    query: str
 
 
 @app.post("/status")
@@ -45,6 +50,16 @@ async def brief_endpoint():
         registry.register(BriefTool())
         brief_text = await registry.get("brief").run()
         return {"brief": brief_text}
+
+
+@app.post("/research")
+async def research_endpoint(req: ResearchRequest):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        registry = ToolRegistry(store)
+        registry.register(ResearchTool())
+        result = await registry.get("research").run(query=req.query)
+        return result
 
 
 @app.get("/health")
