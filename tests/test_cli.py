@@ -65,6 +65,46 @@ def test_work_command(mock_popen, seeded_store):
     mock_popen.assert_called_once()
 
 
+@patch("ev.tools.draft_tools.LLMClient")
+@patch("ev.tools.draft_tools.subprocess.run")
+def test_draft_commit_command(mock_run, mock_llm, seeded_store):
+    mock_run.return_value = MagicMock(stdout="diff --git a/x.py b/x.py\n+def f(): pass", stderr="", returncode=0)
+    llm = MagicMock()
+    llm.complete = AsyncMock(return_value="feat: add f")
+    mock_llm.return_value = llm
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["draft", "commit", "--project", "RoboCAD"])
+    assert result.exit_code == 0
+    assert "feat: add f" in result.output
+
+
+@patch("ev.tools.draft_tools.LLMClient")
+@patch("ev.tools.draft_tools.subprocess.run")
+def test_draft_pr_command(mock_run, mock_llm, seeded_store):
+    mock_run.return_value = MagicMock(stdout="diff --git a/y.py b/y.py\n+def g(): pass", stderr="", returncode=0)
+    llm = MagicMock()
+    llm.complete = AsyncMock(return_value="Title: Add g\n\nBody: adds g")
+    mock_llm.return_value = llm
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["draft", "pr", "--project", "RoboCAD"])
+    assert result.exit_code == 0
+    assert "Add g" in result.output
+
+
+@patch("ev.tools.draft_tools.LLMClient")
+def test_draft_reply_command(mock_llm):
+    llm = MagicMock()
+    llm.complete = AsyncMock(return_value="Thanks, let's talk soon.")
+    mock_llm.return_value = llm
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["draft", "reply", "--to", "recruiter@example.com", "--subject", "Role", "--snippet", "We have a role"])
+    assert result.exit_code == 0
+    assert "Thanks, let's talk soon" in result.output
+
+
 @patch("ev.research.search.httpx.AsyncClient")
 @patch("ev.tools.research_tool.LLMClient")
 def test_research_command(mock_llm_client, mock_async_client):

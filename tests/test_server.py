@@ -82,3 +82,19 @@ async def test_research_endpoint(mock_llm_client, mock_async_client, seeded_db):
         data = response.json()
         assert "Answer with citation" in data["answer"]
         assert any(s["url"] == "https://example.com" for s in data["sources"])
+
+
+@patch("ev.tools.draft_tools.LLMClient")
+@patch("ev.tools.draft_tools.subprocess.run")
+async def test_draft_endpoint(mock_run, mock_llm, seeded_db):
+    from ev.server.api import app
+    mock_run.return_value = MagicMock(stdout="diff --git a/x.py b/x.py\n+def f(): pass", stderr="", returncode=0)
+    llm = MagicMock()
+    llm.complete = AsyncMock(return_value="feat: add f")
+    mock_llm.return_value = llm
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/draft", json={"type": "commit", "project": "RoboCAD"})
+        assert response.status_code == 200
+        data = response.json()
+        assert "feat: add f" in data["draft"]

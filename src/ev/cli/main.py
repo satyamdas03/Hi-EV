@@ -10,6 +10,7 @@ from ev.memory.status import build_status_summary
 from ev.memory.store import MemoryStore
 from ev.tools.registry import ToolRegistry
 from ev.tools.brief_tool import BriefTool
+from ev.tools.draft_tools import DraftCommitTool, DraftPrTool, DraftReplyTool
 from ev.tools.research_tool import ResearchTool
 from ev.tools.status_tool import StatusTool
 from ev.tools.work_tool import WorkTool
@@ -94,5 +95,59 @@ def on(task: str, project: str):
                 raise click.ClickException(result["error"])
             click.echo(f"Spawned Claude Code for {result['project']} (pid {result['pid']}):")
             click.echo(result["context_preview"])
+
+    asyncio.run(_run())
+
+
+@cli.group()
+def draft():
+    """Reversible drafting tools."""
+
+
+@draft.command()
+@click.option("--project", required=True, help="Project to draft a commit for")
+def commit(project: str):
+    """Draft a commit message from staged changes."""
+    async def _run():
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            registry = ToolRegistry(store)
+            registry.register(DraftCommitTool())
+            result = await registry.get("draft_commit").run(project=project)
+            if "error" in result:
+                raise click.ClickException(result["error"])
+            click.echo(result["draft"])
+
+    asyncio.run(_run())
+
+
+@draft.command()
+@click.option("--project", required=True, help="Project to draft a PR for")
+def pr(project: str):
+    """Draft a PR title and body from the branch diff vs main."""
+    async def _run():
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            registry = ToolRegistry(store)
+            registry.register(DraftPrTool())
+            result = await registry.get("draft_pr").run(project=project)
+            if "error" in result:
+                raise click.ClickException(result["error"])
+            click.echo(result["draft"])
+
+    asyncio.run(_run())
+
+
+@draft.command()
+@click.option("--to", required=True, help="Recipient email address")
+@click.option("--subject", required=True, help="Email subject")
+@click.option("--snippet", required=True, help="Original message snippet")
+def reply(to: str, subject: str, snippet: str):
+    """Draft an email reply."""
+    async def _run():
+        registry = ToolRegistry(None)
+        registry.register(DraftReplyTool())
+        result = await registry.get("draft_reply").run(to=to, subject=subject, thread_snippet=snippet)
+        click.echo(result["draft"])
 
     asyncio.run(_run())
