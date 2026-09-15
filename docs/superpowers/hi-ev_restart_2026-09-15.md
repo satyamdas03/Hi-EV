@@ -57,6 +57,7 @@ Key directories and files:
   - `test_nvidia_models.py` — probes which NVIDIA NIM models work with the provided key.
   - `google_auth.py` — standalone browser OAuth flow; saves `secrets/token.json`.
   - `sync_google.py` — ingests live Gmail + Calendar into EV memory.
+  - `migrate_phase3.py` — adds missing `status`/`snooze_until`/`last_reminded` columns to existing SQLite `deadlines` tables.
 - `docs/superpowers/plans/2026-09-15-hi-ev-phase2.md` — completed Phase 2 plan.
 - `docs/superpowers/plans/2026-09-15-hi-ev-phase3.md` — completed Phase 3 plan.
 - `docs/superpowers/research/2026-09-15-nvidia-api-livekit-voice.md` — research on NVIDIA models + voice options.
@@ -101,7 +102,7 @@ Add `.env` values and OAuth files only; never paste them into code or memory fil
 
 **Phase 3 is complete and pushed.** Real-time Google sync is live and Phase 3 structured-memory features are implemented.
 
-Latest commit: `cf3f158`.
+Latest commit: `9d4fdb4`.
 Key prior commits:
 - `0ce429f` — Phase 3 plan.
 - `6b1e0c4` — session recovery dossier mirror.
@@ -205,7 +206,7 @@ Daemon state:
   - 20 Gmail messages ingested → 16 `Person` rows.
   - 30 calendar events ingested → 30 `Deadline` rows.
 - Fixed `src/ev/google_auth.py` to store `token.json` in `secrets/` folder.
-- Added local SQLite migration to add `status` and `snooze_until` columns to existing `deadlines` tables.
+- Added local SQLite migration script `scripts/migrate_phase3.py` to add `status` and `snooze_until` columns to existing `deadlines` tables.
 
 ### Key bug fixes today
 
@@ -347,7 +348,7 @@ Next session should start by:
 - Always preserve the personal-only boundary. If a connector or tool might touch work data, gate it behind `EV_PERSONAL_ONLY=true` (default) and a blocklist.
 - User explicitly authorized use of `.env`, running tests, and running the daemon without asking each time.
 - `token.json` from Google OAuth is already saved in `secrets/`. If it expires, run `python scripts/google_auth.py` again to refresh.
-- Existing local SQLite databases created before Phase 3 may be missing `deadlines.status` and `deadlines.snooze_until`. A migration is included in the Phase 3 commit; if needed, run the alter statements manually.
+- Existing local SQLite databases created before Phase 3 may be missing `deadlines.status` and `deadlines.snooze_until`. Run `python scripts/migrate_phase3.py` if needed.
 
 ---
 
