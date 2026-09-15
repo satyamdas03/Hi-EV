@@ -1,6 +1,6 @@
-"""Console entry point for `python -m evd` and local daemon invocation."""
+"""Console entry point for `python -m evd` — starts the EV daemon API."""
 
-from ev.cli.main import cli
+from ev.daemon.daemon import run
 
 if __name__ == "__main__":
-    cli()
+    run()

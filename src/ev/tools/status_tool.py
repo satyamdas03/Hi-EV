@@ -16,4 +16,6 @@ class StatusTool(Tool):
 
     async def run(self, project: str) -> str:
         summary = await build_status_summary(self.store, project)
+        if "error" in summary:
+            return f"EV: {summary['error']}"
         return summary["summary_text"]

@@ -7,7 +7,7 @@ Usage:
 import asyncio
 
 from ev.config import get_settings
-from ev.db.base import SessionLocal
+from ev.db.base import Base, SessionLocal, engine
 from ev.ingestion.github import GitHubIngestion
 from ev.ingestion.notes import NotesIngestion
 from ev.memory.store import MemoryStore
@@ -15,13 +15,16 @@ from ev.memory.store import MemoryStore
 
 async def main() -> None:
     settings = get_settings()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     async with SessionLocal() as session:
         store = MemoryStore(session)
 
         gh = GitHubIngestion(settings)
-        gh.add_repo("satyamdas03", "RoboCAD")
-        gh.add_repo("satyamdas03", "LearningRobotics")
-        gh.add_repo("satyamdas03", "Hi-EV")
+        repos = [("satyamdas03", "RoboCAD"), ("satyamdas03", "LearningRobotics"), ("satyamdas03", "Hi-EV")]
+        for owner, name in repos:
+            await store.get_or_create_project(name, repo_url=f"https://github.com/{owner}/{name}")
+            gh.add_repo(owner, name)
         gh_records = await gh.ingest()
         await store.upsert_ingest(gh_records)
 
