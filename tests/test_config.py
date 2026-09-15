@@ -7,7 +7,10 @@ def test_settings_loads_from_env(monkeypatch):
     monkeypatch.setenv("EV_PERSONAL_ONLY", "true")
     monkeypatch.setenv("EV_NOTES_PATH", "/tmp/notes")
     monkeypatch.setenv("EV_GITHUB_TOKEN", "ghp_test")
+
+    get_settings.cache_clear()
     settings = get_settings()
+
     assert settings.database_url == "postgresql://localhost:5432/hiev_test"
     assert settings.redis_url == "redis://localhost:6379/0"
     assert settings.personal_only is True
