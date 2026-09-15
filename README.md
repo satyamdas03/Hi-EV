@@ -448,11 +448,50 @@ These are not blocked; they are sequenced after the core is reliable.
 
 ---
 
+## Setup (Phase 1)
+
+1. Install Python 3.12+ and Postgres 16 with pgvector.
+2. Create databases: `createdb hiev` and `createdb hiev_test`.
+3. Copy `.env.example` to `.env` and fill in at least:
+   - `EV_DATABASE_URL`
+   - `EV_NOTES_PATH`
+   - `EV_GITHUB_TOKEN` (for live GitHub ingestion)
+4. Install the project:
+   ```bash
+   pip install -e ".[dev]"
+   ```
+5. Run tests:
+   ```bash
+   pytest
+   ```
+6. Seed your local memory (optional, needs `EV_GITHUB_TOKEN`):
+   ```bash
+   python scripts/seed_demo.py
+   ```
+7. Run the daemon:
+   ```bash
+   python -m evd
+   # or
+   uvicorn ev.server.api:app --host 127.0.0.1 --port 7345
+   ```
+8. Query status:
+   ```bash
+   ev status RoboCAD
+   ```
+   Or via the API:
+   ```bash
+   curl -X POST http://127.0.0.1:7345/status -H "Content-Type: application/json" -d '{"project":"RoboCAD"}'
+   ```
+
+> **Note:** If you do not have a local Postgres running, the test suite falls back to an in-memory async SQLite database so the core logic remains testable.
+
+---
+
 ## Status
 
-**Phase 1 — Foundation in planning.**
+**Phase 1 — Foundation implemented.**
 
-The architecture, data boundary, permission tiers, and roadmap are locked. Implementation starts with the local daemon scaffold, GitHub ingestion, and the first `ev status` command.
+The local daemon scaffold, Postgres memory schema, personal-only security boundary, GitHub + notes ingestion, and the first `ev status <project>` command are in place and tested. Phase 2 work will add `ev brief`, web research, T1 drafting, and Claude Code spawning.
 
 ---
 
