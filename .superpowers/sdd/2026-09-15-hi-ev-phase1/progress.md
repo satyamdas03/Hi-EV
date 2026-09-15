@@ -7,28 +7,23 @@
 - Local path: C:/Users/point/projects/Hi-EV
 
 ## Todos
-- [ ] Task 1: Project scaffold and configuration
-- [x] Task 1: Project scaffold and configuration
-- [x] Task 2: Database models and pgvector schema (APPROVED; minor: lazy DATABASE_URL resolution parked)
-- [x] Task 3: Security boundary — personal-only and blocklist (APPROVED; minors parked: error message wording, substring blocklist, missing guard test, type hints)
-- [x] Task 4: Notes vault ingestion (APPROVED; minor parked: use `assert_personal_only` directly instead of context-manager pattern)
-- [x] Task 5: GitHub personal repo ingestion (APPROVED after fix round 1; async interface fixed; workflow-run ingestion deferred; real API testing deferred)
-- [ ] Task 6: Memory store — structured CRUD + ingest persistence
-- [ ] Task 7: Status summary builder
-- [ ] Task 8: Tool registry and `ev status` tool
-- [ ] Task 9: CLI entrypoint — `ev status`
-- [ ] Task 10: FastAPI internal API and daemon skeleton
-- [ ] Task 6: Memory store — structured CRUD + ingest persistence
-- [ ] Task 7: Status summary builder
-- [ ] Task 8: Tool registry and `ev status` tool
-- [ ] Task 9: CLI entrypoint — `ev status`
-- [ ] Task 10: FastAPI internal API and daemon skeleton
-- [ ] Task 11: Integration — run full `ev status` against real GitHub + notes
-- [ ] Task 12: Phase 1 docs and final README updates
+- [x] Task 1: Project scaffold and configuration (APPROVED)
+- [x] Task 2: Database models and pgvector schema (APPROVED; SQLite test fallback accepted)
+- [x] Task 3: Security boundary — personal-only and blocklist (APPROVED)
+- [x] Task 4: Notes vault ingestion (APPROVED)
+- [x] Task 5: GitHub personal repo ingestion (APPROVED; async interface fixed)
+- [x] Task 6: Memory store — structured CRUD + ingest persistence (APPROVED; review fixed tuple_in upsert)
+- [x] Task 7: Status summary builder (APPROVED)
+- [x] Task 8: Tool registry and `ev status` tool (APPROVED)
+- [x] Task 9: CLI entrypoint — `ev status` (APPROVED)
+- [x] Task 10: FastAPI internal API and daemon skeleton (APPROVED)
+- [x] Task 11: Integration — harness for live GitHub + notes (APPROVED; skip-by-default)
+- [x] Task 12: Phase 1 docs and final README updates (APPROVED)
 
 ## Rulings
 - Task 2: Accept SQLite test fallback because local Postgres is not available. Production path still targets Postgres. Minor finding about lazy DATABASE_URL resolution is deferred; revisit when pgvector columns are added.
 - Controller fix: Added `tool.hatch.build.targets.wheel.packages = ["src/ev"]` to `pyproject.toml` because `pip install -e .` failed without it. This was a missing Task 1 deliverable that blocked all subsequent test collection. Committed as `0e0e170`.
+- Task 6 review: Switched upsert lookup from separate `IN` clauses to `sqlalchemy.tuple_(source, source_id).in_(...)` to avoid matching mixed pairs. Added regression test. Committed as `5c31b7d`.
 
 ## Conflict scan
 
@@ -45,3 +40,49 @@
 - Implementer: DONE (commits 720bdcc, 1bb0eb4, 4a9f123)
 - Reviewer: APPROVED after fix round 1
 - [x] Task 1: Project scaffold and configuration
+
+## Task 2
+- Implementer: DONE (commits in earlier session)
+- Reviewer: APPROVED
+- [x] Task 2: Database models and pgvector schema
+
+## Task 3
+- Implementer: DONE (commits in earlier session)
+- Reviewer: APPROVED
+- [x] Task 3: Security boundary — personal-only and blocklist
+
+## Task 4
+- Implementer: DONE (commits in earlier session)
+- Reviewer: APPROVED
+- [x] Task 4: Notes vault ingestion
+
+## Task 5
+- Implementer: DONE (commits in earlier session)
+- Reviewer: APPROVED after fix round 1
+- [x] Task 5: GitHub personal repo ingestion
+
+## Tasks 6–10
+- Implementer: DONE (commits 386bb29, df46044, 3ca9b43, 08d6a28, ac6bec6)
+- Reviewer: APPROVED after controller fix `5c31b7d`
+- Report: `.superpowers/sdd/2026-09-15-hi-ev-phase1/tasks-6-10-report.md`
+- [x] Task 6: Memory store
+- [x] Task 7: Status summary builder
+- [x] Task 8: Tool registry and `ev status` tool
+- [x] Task 9: CLI entrypoint — `ev status`
+- [x] Task 10: FastAPI internal API and daemon skeleton
+
+## Task 11
+- Implementer: controller direct
+- Reviewer: APPROVED
+- [x] Task 11: Integration harness for live GitHub + notes
+
+## Task 12
+- Implementer: controller direct
+- Reviewer: APPROVED
+- [x] Task 12: Phase 1 docs and final README updates
+
+## Phase 1 completion
+- All 12 tasks complete.
+- Test suite: 19 passed, 1 skipped (integration test skipped by default).
+- Lint: ruff clean.
+- Next: push to origin/main, then start Phase 2 planning.
