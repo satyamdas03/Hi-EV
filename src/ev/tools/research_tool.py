@@ -41,7 +41,7 @@ class ResearchTool(Tool):
                     socket_connect_timeout=1,
                     socket_timeout=1,
                 )
-            except Exception:
+            except (ConnectionError, TimeoutError, OSError, redis.RedisError):
                 self._redis = False
         return self._redis if isinstance(self._redis, redis.Redis) else None
 
@@ -57,7 +57,7 @@ class ResearchTool(Tool):
             cached = await client.get(self._cache_key(query))
             if cached:
                 return json.loads(cached)
-        except Exception:
+        except (ConnectionError, redis.RedisError, json.JSONDecodeError):
             return None
         return None
 
@@ -71,8 +71,8 @@ class ResearchTool(Tool):
                 json.dumps(payload, default=str),
                 ex=int(self.cache_ttl.total_seconds()),
             )
-        except Exception:
-            pass
+        except (ConnectionError, redis.RedisError):
+            return
 
     @staticmethod
     def _build_prompt(query: str, sources: list[dict[str, str]]) -> str:

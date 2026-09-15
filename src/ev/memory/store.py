@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import desc, func, select, tuple_
 
-from ev.db.models import Event, Ingest, Project
+from ev.db.models import Deadline, Event, Ingest, Project
 
 
 class MemoryStore:
@@ -90,6 +90,55 @@ class MemoryStore:
             .order_by(desc(Ingest.updated_at))
             .limit(limit)
         )
+        return list(result.scalars().all())
+
+    @staticmethod
+    def _parse_due_date(value):
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            return datetime.fromisoformat(value)
+        raise TypeError(f"Unsupported due_date type: {type(value)}")
+
+    async def upsert_deadlines(self, deadlines: list[dict]) -> int:
+        """Bulk upsert Deadline rows by (source, source_id)."""
+        if not deadlines:
+            return 0
+        keys = {(d["source"], d["source_id"]) for d in deadlines}
+        result = await self.session.execute(
+            select(Deadline).where(tuple_(Deadline.source, Deadline.source_id).in_(list(keys)))
+        )
+        existing = {(row.source, row.source_id): row for row in result.scalars().all()}
+
+        new_rows: list[Deadline] = []
+        now = datetime.now(UTC)
+        for data in deadlines:
+            key = (data["source"], data["source_id"])
+            deadline_data = dict(data)
+            deadline_data["due_date"] = self._parse_due_date(deadline_data.get("due_date"))
+            row = existing.get(key)
+            if row is None:
+                new_rows.append(Deadline(**deadline_data))
+            else:
+                row.title = deadline_data.get("title", row.title)
+                row.due_date = deadline_data.get("due_date", row.due_date)
+                row.priority = deadline_data.get("priority", row.priority)
+                row.project_name = deadline_data.get("project_name", row.project_name)
+                row.updated_at = now
+                self.session.add(row)
+        self.session.add_all(new_rows)
+        await self.session.commit()
+        return len(deadlines)
+
+    async def get_upcoming_deadlines(self, after: datetime | None = None, before: datetime | None = None) -> list[Deadline]:
+        stmt = select(Deadline).order_by(Deadline.due_date)
+        if after is not None:
+            stmt = stmt.where(Deadline.due_date >= after)
+        if before is not None:
+            stmt = stmt.where(Deadline.due_date <= before)
+        result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def add_event(self, project_name: str, event_type: str, description: str, source_url: str | None = None) -> Event:

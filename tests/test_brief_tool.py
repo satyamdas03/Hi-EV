@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from ev.db.base import Base, SessionLocal, engine
-from ev.db.models import Ingest, Project
+from ev.db.models import Ingest
 from ev.memory.store import MemoryStore
 from ev.tools.brief_tool import BriefTool
 

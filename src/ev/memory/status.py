@@ -6,7 +6,6 @@ from sqlalchemy import desc, select
 
 from ev.db.models import Ingest, Project
 
-
 _PHASE_RE = re.compile(r"(?i)\bphase\s+(\d+[A-Z]?)\b")
 
 

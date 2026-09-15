@@ -1,6 +1,7 @@
-import pytest
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from ev.cli.main import cli
@@ -18,6 +19,10 @@ async def seeded_store():
         await store.upsert_ingest([{
             "source": "github_commits", "source_id": "RoboCAD:sha1", "content_hash": "h1",
             "content": "feat: deliver Phase 29", "project_tag": "robocad", "privacy_level": "personal"
+        }])
+        await store.upsert_deadlines([{
+            "title": "Stand-up prep", "due_date": datetime.now(UTC) + timedelta(hours=1),
+            "source": "calendar", "source_id": "cal1", "priority": "medium"
         }])
     yield
     async with engine.begin() as conn:
@@ -48,21 +53,22 @@ def test_brief_command(seeded_store):
     assert "active project" in result.output.lower()
 
 
-@patch("ev.tools.work_tool.subprocess.Popen")
-def test_work_command(mock_popen, seeded_store):
+@patch("ev.tools.work_tool.asyncio.create_subprocess_exec")
+def test_work_command(mock_create, seeded_store):
     process = MagicMock()
     process.stdin = MagicMock()
+    process.stdin.drain = AsyncMock()
     process.stdout = MagicMock()
     process.stderr = MagicMock()
     process.pid = 1234
-    mock_popen.return_value = process
+    mock_create.return_value = process
 
     runner = CliRunner()
     result = runner.invoke(cli, ["work", "on", "fix failing test in Phase 29", "--project", "RoboCAD"])
     assert result.exit_code == 0
     assert "RoboCAD" in result.output
     assert "1234" in result.output
-    mock_popen.assert_called_once()
+    mock_create.assert_called_once()
 
 
 @patch("ev.tools.draft_tools.LLMClient")
@@ -128,3 +134,15 @@ def test_research_command(mock_llm_client, mock_async_client):
     assert result.exit_code == 0
     assert "Answer with citation" in result.output
     assert "https://example.com" in result.output
+
+
+@patch("ev.tools.calendar_prep_tool.LLMClient")
+def test_calendar_prep_command(mock_llm, seeded_store):
+    llm = MagicMock()
+    llm.complete = AsyncMock(return_value="Prepare stand-up notes.")
+    mock_llm.return_value = llm
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["calendar", "prep", datetime.now(UTC).isoformat()])
+    assert result.exit_code == 0
+    assert "Prepare stand-up notes" in result.output

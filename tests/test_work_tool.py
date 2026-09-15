@@ -1,6 +1,6 @@
 """Tests for the Claude Code spawn tool."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import select
@@ -8,7 +8,6 @@ from sqlalchemy import select
 from ev.db.base import Base, SessionLocal, engine
 from ev.db.models import Event
 from ev.memory.store import MemoryStore
-from ev.tools.registry import ToolRegistry
 from ev.tools.work_tool import WorkTool
 
 
@@ -22,8 +21,8 @@ async def store():
         await conn.run_sync(Base.metadata.drop_all)
 
 
-@patch("ev.tools.work_tool.subprocess.Popen")
-async def test_work_tool_spawns_claude_code_with_context(mock_popen, store):
+@patch("ev.tools.work_tool.asyncio.create_subprocess_exec")
+async def test_work_tool_spawns_claude_code_with_context(mock_create, store):
     await store.get_or_create_project("RoboCAD", current_phase="Phase 29", repo_path="/repos/RoboCAD")
     await store.upsert_ingest([
         {"source": "github_commits", "source_id": "RoboCAD:c1", "content_hash": "h1", "content": "feat: gait controller", "project_tag": "robocad", "privacy_level": "personal"},
@@ -32,22 +31,27 @@ async def test_work_tool_spawns_claude_code_with_context(mock_popen, store):
 
     process = MagicMock()
     process.stdin = MagicMock()
+    process.stdin.drain = AsyncMock()
     process.stdout = MagicMock()
     process.stderr = MagicMock()
-    mock_popen.return_value = process
+    process.pid = 12345
+    mock_create.return_value = process
 
     tool = WorkTool()
     tool.bind_store(store)
     result = await tool.run(project="RoboCAD", task="refactor gait controller into a separate module")
 
-    mock_popen.assert_called_once()
-    args, kwargs = mock_popen.call_args
+    mock_create.assert_called_once()
+    args, kwargs = mock_create.call_args
     assert kwargs["cwd"] == "/repos/RoboCAD"
-    assert args[0] == ["claude", "code"]
+    assert args == ("claude", "code")
     written = process.stdin.write.call_args[0][0]
-    assert "refactor gait controller" in written
-    assert "gait controller" in written
-    assert "Phase 29" in written
+    assert isinstance(written, bytes)
+    written_text = written.decode("utf-8")
+    assert "refactor gait controller" in written_text
+    assert "gait controller" in written_text
+    assert "Phase 29" in written_text
+    assert result["pid"] == 12345
 
     # Event logged
     event_result = await store.session.execute(select(Event).where(Event.event_type == "spawn_claude_code"))

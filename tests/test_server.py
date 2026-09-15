@@ -1,6 +1,7 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.fixture
@@ -39,15 +40,16 @@ async def test_brief_endpoint(seeded_db):
         assert "active project" in data["brief"].lower()
 
 
-@patch("ev.tools.work_tool.subprocess.Popen")
-async def test_work_endpoint(mock_popen, seeded_db):
+@patch("ev.tools.work_tool.asyncio.create_subprocess_exec")
+async def test_work_endpoint(mock_create, seeded_db):
     from ev.server.api import app
     process = MagicMock()
     process.stdin = MagicMock()
+    process.stdin.drain = AsyncMock()
     process.stdout = MagicMock()
     process.stderr = MagicMock()
     process.pid = 1234
-    mock_popen.return_value = process
+    mock_create.return_value = process
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/work", json={"project": "RoboCAD", "task": "fix test"})
@@ -98,3 +100,29 @@ async def test_draft_endpoint(mock_run, mock_llm, seeded_db):
         assert response.status_code == 200
         data = response.json()
         assert "feat: add f" in data["draft"]
+
+
+@patch("ev.tools.calendar_prep_tool.LLMClient")
+async def test_calendar_prep_endpoint(mock_llm, seeded_db):
+    from datetime import UTC, datetime, timedelta
+
+    from ev.db.base import SessionLocal
+    from ev.server.api import app
+
+    async with SessionLocal() as session:
+        from ev.memory.store import MemoryStore
+        store = MemoryStore(session)
+        await store.upsert_deadlines([{
+            "title": "Review call", "due_date": datetime.now(UTC) + timedelta(hours=1),
+            "source": "calendar", "source_id": "cal1", "priority": "high"
+        }])
+
+    llm = MagicMock()
+    llm.complete = AsyncMock(return_value="Review call prep packet.")
+    mock_llm.return_value = llm
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/calendar-prep", json={"time": datetime.now(UTC).isoformat()})
+        assert response.status_code == 200
+        data = response.json()
+        assert "Review call prep packet" in data["prep"]

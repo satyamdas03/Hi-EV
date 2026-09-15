@@ -9,6 +9,7 @@ from ev.config import get_settings
 from ev.db.base import SessionLocal
 from ev.memory.store import MemoryStore
 from ev.tools.brief_tool import BriefTool
+from ev.tools.calendar_prep_tool import CalendarPrepTool
 from ev.tools.draft_tools import DraftCommitTool, DraftPrTool, DraftReplyTool
 from ev.tools.registry import ToolRegistry
 from ev.tools.research_tool import ResearchTool
@@ -45,6 +46,10 @@ class DraftRequest(BaseModel):
     to: str | None = None
     subject: str | None = None
     snippet: str | None = None
+
+
+class CalendarPrepRequest(BaseModel):
+    time: str
 
 
 @app.post("/status")
@@ -109,6 +114,16 @@ async def draft_endpoint(req: DraftRequest):
             result = await registry.get("draft_pr").run(project=req.project or "")
         else:
             return {"error": f"Unknown draft type: {req.type}"}
+        return result
+
+
+@app.post("/calendar-prep")
+async def calendar_prep_endpoint(req: CalendarPrepRequest):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        registry = ToolRegistry(store)
+        registry.register(CalendarPrepTool())
+        result = await registry.get("calendar_prep").run(time=req.time)
         return result
 
 

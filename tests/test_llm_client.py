@@ -1,6 +1,5 @@
 """Tests for the Hi-EV LLM client."""
 
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

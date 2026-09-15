@@ -71,3 +71,23 @@ class Event(Base):
     description = Column(Text, nullable=False)
     source_url = Column(String(1024), nullable=True)
     happened_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class Deadline(Base):
+    """Structured deadlines extracted from calendar and explicit captures."""
+
+    __tablename__ = "deadlines"
+    __table_args__ = (
+        UniqueConstraint("source", "source_id", name="uix_deadline_source_id"),
+    )
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(512), nullable=False)
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    priority = Column(String(32), default="medium")
+    source = Column(String(64), nullable=False, index=True)
+    source_id = Column(String(512), nullable=False)
+    project_name = Column(String(128), nullable=True, index=True)
+    last_reminded = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)

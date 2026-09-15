@@ -1,6 +1,6 @@
 """Claude Code spawn tool for Tier-1 reversible work."""
 
-import subprocess
+import asyncio
 from typing import Any
 
 from ev.memory.status import build_status_summary
@@ -24,8 +24,8 @@ class WorkTool(Tool):
     async def _build_context(self, project_name: str, task: str) -> str:
         summary = await build_status_summary(self.store, project_name)
         lines = [
-            f"# EV Task Context",
-            f"",
+            "# EV Task Context",
+            "",
             f"Project: {project_name}",
             f"Task: {task}",
         ]
@@ -60,18 +60,19 @@ class WorkTool(Tool):
 
         context = await self._build_context(project, task)
         try:
-            process = subprocess.Popen(
-                ["claude", "code"],
+            process = await asyncio.create_subprocess_exec(
+                "claude",
+                "code",
                 cwd=repo_path,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
             if process.stdin:
-                process.stdin.write(context)
+                process.stdin.write(context.encode("utf-8"))
+                await process.stdin.drain()
                 process.stdin.close()
-        except Exception as exc:
+        except (TimeoutError, OSError, NotImplementedError, FileNotFoundError) as exc:
             return {"error": f"Failed to spawn Claude Code: {exc}"}
 
         await self.store.add_event(

@@ -8,9 +8,10 @@ import click
 from ev.db.base import SessionLocal
 from ev.memory.status import build_status_summary
 from ev.memory.store import MemoryStore
-from ev.tools.registry import ToolRegistry
 from ev.tools.brief_tool import BriefTool
+from ev.tools.calendar_prep_tool import CalendarPrepTool
 from ev.tools.draft_tools import DraftCommitTool, DraftPrTool, DraftReplyTool
+from ev.tools.registry import ToolRegistry
 from ev.tools.research_tool import ResearchTool
 from ev.tools.status_tool import StatusTool
 from ev.tools.work_tool import WorkTool
@@ -149,5 +150,29 @@ def reply(to: str, subject: str, snippet: str):
         registry.register(DraftReplyTool())
         result = await registry.get("draft_reply").run(to=to, subject=subject, thread_snippet=snippet)
         click.echo(result["draft"])
+
+    asyncio.run(_run())
+
+
+@cli.group()
+def calendar():
+    """Calendar and deadline helpers."""
+
+
+@calendar.command()
+@click.argument("time")
+def prep(time: str):
+    """Build a prep packet for TIME (ISO or HH:MM)."""
+    async def _run():
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            registry = ToolRegistry(store)
+            registry.register(CalendarPrepTool())
+            result = await registry.get("calendar_prep").run(time=time)
+            click.echo(result["prep"])
+            if result["deadlines"]:
+                click.echo("\nUpcoming:")
+                for d in result["deadlines"]:
+                    click.echo(f"  - {d['title']} ({d['due_date']}, {d['priority']})")
 
     asyncio.run(_run())
