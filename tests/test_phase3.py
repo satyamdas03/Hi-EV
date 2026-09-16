@@ -131,9 +131,13 @@ async def test_get_recent_emails(store):
 
 async def test_deadline_watcher_buckets(store):
     now = datetime.now(UTC)
+    # Keep the "today" deadline within the current calendar day so the bucket
+    # is deterministic regardless of what time the test runs.
+    today_end = now.replace(hour=23, minute=59, second=59, microsecond=0)
+    today_deadline = min(now + timedelta(hours=2), today_end - timedelta(seconds=1))
     await store.upsert_deadlines([
         {"title": "Overdue", "source": "cal", "source_id": "b1", "due_date": now - timedelta(days=1), "status": "open"},
-        {"title": "Today", "source": "cal", "source_id": "b2", "due_date": now + timedelta(hours=2), "status": "open"},
+        {"title": "Today", "source": "cal", "source_id": "b2", "due_date": today_deadline, "status": "open"},
         {"title": "Week", "source": "cal", "source_id": "b3", "due_date": now + timedelta(days=3), "status": "open"},
         {"title": "Future", "source": "cal", "source_id": "b4", "due_date": now + timedelta(days=14), "status": "open"},
     ])
