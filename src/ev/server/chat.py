@@ -18,6 +18,7 @@ from ev.tools.brief_tool import BriefTool
 from ev.tools.calendar_prep_tool import CalendarPrepTool
 from ev.tools.deadline_watcher import DeadlineWatcherTool
 from ev.tools.draft_tools import DraftCommitTool, DraftPrTool, DraftReplyTool
+from ev.tools.memory_tool import MemoryTool, RememberTool
 from ev.tools.obligations_tool import ObligationsTool
 from ev.tools.people_tool import PeopleTool
 from ev.tools.prep_tool import PrepTool
@@ -39,6 +40,11 @@ _INTENT_ALIASES = {
     "deadline": "deadline_watcher",
     "deadlines": "deadline_watcher",
     "calendar_prep": "calendar_prep",
+    "search_memory": "memory",
+    "find_memory": "memory",
+    "recall": "memory",
+    "remember": "remember",
+    "save_memory": "remember",
 }
 
 
@@ -107,6 +113,8 @@ class ChatSession:
             "Available tools:\n"
             "- status(project: str)\n"
             "- brief()\n"
+            "- memory(query: str, project?: str)\n"
+            "- remember(text: str, project?: str)\n"
             "- research(query: str)\n"
             "- deadlines(project?: str)\n"
             "- alerts(project?: str)\n"
@@ -181,6 +189,8 @@ class ChatSession:
     def _register_tools(self, registry: ToolRegistry) -> None:
         registry.register(StatusTool())
         registry.register(BriefTool())
+        registry.register(MemoryTool())
+        registry.register(RememberTool())
         registry.register(ResearchTool())
         registry.register(DeadlineWatcherTool())
         registry.register(AlertsTool())

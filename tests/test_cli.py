@@ -146,3 +146,17 @@ def test_calendar_prep_command(mock_llm, seeded_store):
     result = runner.invoke(cli, ["calendar", "prep", datetime.now(UTC).isoformat()])
     assert result.exit_code == 0
     assert "Prepare stand-up notes" in result.output
+
+
+def test_remember_command(seeded_store):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["remember", "RoboCAD is in Phase 23."])
+    assert result.exit_code == 0
+    assert "EV remembered that" in result.output
+
+
+def test_remember_command_with_project(seeded_store):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["remember", "RoboCAD milestone reached.", "--project", "RoboCAD"])
+    assert result.exit_code == 0
+    assert "EV remembered that" in result.output

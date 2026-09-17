@@ -1,10 +1,20 @@
 """Structured memory store for ingested personal data."""
 
+import re
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import desc, func, select, tuple_
+from sqlalchemy import desc, func, or_, select, tuple_
 
-from ev.db.models import Deadline, Decision, Event, Ingest, Obligation, Person, Project
+from ev.db.models import (
+    Deadline,
+    Decision,
+    DocumentChunk,
+    Event,
+    Ingest,
+    Obligation,
+    Person,
+    Project,
+)
 
 
 class MemoryStore:
@@ -340,3 +350,265 @@ class MemoryStore:
         self.session.add(event)
         await self.session.commit()
         return event
+
+    # ------------------------------------------------------------------
+    # Semantic memory (DocumentChunk + sqlite-vec)
+    # ------------------------------------------------------------------
+
+    async def upsert_document_chunks(self, chunks: list[dict]) -> list[int]:
+        """Bulk upsert DocumentChunk rows by (source, source_id, chunk_index) and index vectors.
+
+        Returns the list of chunk ids that were inserted or updated.
+        """
+        if not chunks:
+            return []
+
+        # Validate and normalize keys.
+        keys = set()
+        for chunk in chunks:
+            source = chunk.get("source", "").strip()
+            source_id = chunk.get("source_id", "").strip()
+            chunk_index = int(chunk.get("chunk_index", 0))
+            if not source or not source_id:
+                continue
+            keys.add((source, source_id, chunk_index))
+
+        if not keys:
+            return []
+
+        result = await self.session.execute(
+            select(DocumentChunk).where(
+                tuple_(DocumentChunk.source, DocumentChunk.source_id, DocumentChunk.chunk_index).in_(list(keys))
+            )
+        )
+        existing = {
+            (row.source, row.source_id, row.chunk_index): row
+            for row in result.scalars().all()
+        }
+
+        now = datetime.now(UTC)
+        new_rows: list[DocumentChunk] = []
+        changed_rows: list[DocumentChunk] = []
+        all_touched_ids: list[int | None] = []
+
+        for chunk in chunks:
+            source = chunk.get("source", "").strip()
+            source_id = chunk.get("source_id", "").strip()
+            chunk_index = int(chunk.get("chunk_index", 0))
+            if not source or not source_id:
+                continue
+            text = (chunk.get("text") or "").strip()
+            if not text:
+                continue
+            key = (source, source_id, chunk_index)
+            row = existing.get(key)
+            if row is None:
+                new_rows.append(
+                    DocumentChunk(
+                        source=source,
+                        source_id=source_id,
+                        chunk_index=chunk_index,
+                        text=text,
+                        project_name=chunk.get("project_name"),
+                    )
+                )
+                all_touched_ids.append(None)
+            elif row.text != text:
+                row.text = text
+                row.project_name = chunk.get("project_name", row.project_name)
+                row.updated_at = now
+                changed_rows.append(row)
+                self.session.add(row)
+                all_touched_ids.append(row.id)
+            else:
+                all_touched_ids.append(row.id)
+
+        self.session.add_all(new_rows)
+        await self.session.flush()
+
+        # Map placeholder None ids to real ids for new rows.
+        real_ids = []
+        new_iter = iter(new_rows)
+        for stored_id in all_touched_ids:
+            if stored_id is None:
+                new_row = next(new_iter)
+                real_ids.append(new_row.id)
+            else:
+                real_ids.append(stored_id)
+
+        to_embed = [row for row in (*new_rows, *changed_rows) if row.text]
+        await self._index_chunk_vectors(to_embed)
+
+        await self.session.commit()
+        return [rid for rid in real_ids if rid is not None]
+
+    async def _index_chunk_vectors(self, rows: list[DocumentChunk]) -> None:
+        """Compute embeddings and insert vector table entries.
+
+        Existing vectors for the same chunk ids are removed first because
+        sqlite-vec virtual tables can be finicky about INSERT OR REPLACE.
+        """
+        if not rows:
+            return
+
+        from ev.db import vector
+        from ev.embeddings import get_embedding_model
+
+        valid_rows = [row for row in rows if row.id is not None]
+        if not valid_rows:
+            return
+
+        texts = [row.text for row in valid_rows]
+        embeddings = get_embedding_model().encode(texts)
+
+        vector_payloads = [
+            {"id": row.id, "embedding": embedding}
+            for row, embedding in zip(valid_rows, embeddings, strict=True)
+        ]
+        chunk_ids = [row.id for row in valid_rows]
+        # Ensure vector table exists (idempotent).
+        await vector.create_vector_table(self.session)
+        await vector.delete_vector_chunks(self.session, chunk_ids)
+        await vector.index_chunks(self.session, vector_payloads)
+
+    async def search_document_chunks(
+        self,
+        query: str,
+        project_name: str | None = None,
+        k: int = 5,
+        include_recent: int = 3,
+    ) -> list[dict]:
+        """Hybrid search over DocumentChunk rows.
+
+        Combines sqlite-vec KNN, SQL keyword overlap, and recency. Returns at
+        most *k* ranked results.
+        """
+        from ev.db import vector
+        from ev.embeddings import get_embedding_model
+
+        if not query or not query.strip():
+            return []
+
+        query_text = query.strip()
+        query_embedding = get_embedding_model().encode_one(query_text)
+
+        # Ensure vector table exists.
+        await vector.create_vector_table(self.session)
+
+        vector_results = await vector.search_chunks(self.session, query_embedding, k=k * 2)
+        vector_chunk_ids = {chunk_id for chunk_id, _ in vector_results}
+
+        # Keyword matches for hybrid recall.
+        keyword_chunk_ids: set[int] = set()
+        query_tokens = self._tokenize(query_text)
+        if query_tokens:
+            like_patterns = [f"%{token}%" for token in query_tokens]
+            stmt = select(DocumentChunk)
+            if project_name is not None:
+                stmt = stmt.where(DocumentChunk.project_name == project_name.lower())
+            # OR across tokens using SQLAlchemy's or_ helper.
+            stmt = stmt.where(or_(*[DocumentChunk.text.ilike(pattern) for pattern in like_patterns]))
+            stmt = stmt.limit(k * 4)
+            result = await self.session.execute(stmt)
+            keyword_chunk_ids = {row.id for row in result.scalars().all()}
+
+        all_ids = vector_chunk_ids | keyword_chunk_ids
+        if not all_ids:
+            return []
+
+        stmt = select(DocumentChunk).where(DocumentChunk.id.in_(list(all_ids)))
+        if project_name is not None:
+            stmt = stmt.where(DocumentChunk.project_name == project_name.lower())
+        result = await self.session.execute(stmt)
+        rows = {row.id: row for row in result.scalars().all()}
+
+        # Also pull a few recent chunks as fallback/refresh signal.
+        recent_stmt = select(DocumentChunk).order_by(desc(DocumentChunk.updated_at)).limit(include_recent)
+        if project_name is not None:
+            recent_stmt = recent_stmt.where(DocumentChunk.project_name == project_name.lower())
+        recent_result = await self.session.execute(recent_stmt)
+        for row in recent_result.scalars().all():
+            if row.id not in rows:
+                rows[row.id] = row
+
+        vector_distances = {chunk_id: distance for chunk_id, distance in vector_results}
+        scored: list[tuple[float, DocumentChunk]] = []
+        for row in rows.values():
+            score = self._chunk_score(row, query_tokens, vector_distances)
+            scored.append((score, row))
+
+        scored.sort(key=lambda item: (-item[0], item[1].updated_at or datetime.min.replace(tzinfo=UTC)))
+
+        return [
+            {
+                "id": row.id,
+                "source": row.source,
+                "source_id": row.source_id,
+                "chunk_index": row.chunk_index,
+                "text": row.text,
+                "project_name": row.project_name,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                "score": round(score, 4),
+            }
+            for score, row in scored[:k]
+        ]
+
+    @staticmethod
+    def _tokenize(text: str) -> set[str]:
+        """Normalize and tokenize query for keyword matching."""
+        return {token.lower() for token in re.findall(r"[A-Za-z0-9]+", text) if len(token) > 2}
+
+    def _chunk_score(
+        self,
+        row: DocumentChunk,
+        query_tokens: set[str],
+        vector_distances: dict[int, float],
+    ) -> float:
+        """Blend vector distance, keyword overlap, recency, and source trust."""
+        now = datetime.now(UTC)
+
+        # Vector distance: lower distance = higher score.
+        distance = vector_distances.get(row.id, 1.0)
+        vector_score = max(0.0, 1.0 - distance)
+
+        # Keyword overlap.
+        row_tokens = self._tokenize(row.text or "")
+        keyword_hits = len(query_tokens & row_tokens)
+        keyword_score = min(keyword_hits, 3) * 0.15
+
+        # Recency decay: full score within 24h, half at ~1 week, etc.
+        updated_at = row.updated_at
+        if updated_at is None:
+            recency_score = 0.0
+        else:
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=UTC)
+            hours = max(0.0, (now - updated_at).total_seconds() / 3600.0)
+            recency_score = 0.1 * (0.5 ** (hours / 24.0))
+
+        # Slight boost for user-authored memory and personal notes.
+        source_bonus = 0.05 if row.source in {"user_memory", "notes"} else 0.0
+
+        return vector_score + keyword_score + recency_score + source_bonus
+
+    async def delete_document_chunks(self, source: str, source_id: str | None = None) -> int:
+        """Delete DocumentChunk rows (and their vectors) by source or source+source_id."""
+        from ev.db import vector
+
+        stmt = select(DocumentChunk).where(DocumentChunk.source == source)
+        if source_id is not None:
+            stmt = stmt.where(DocumentChunk.source_id == source_id)
+        result = await self.session.execute(stmt)
+        rows = list(result.scalars().all())
+        if not rows:
+            return 0
+
+        chunk_ids = [row.id for row in rows if row.id is not None]
+        await vector.create_vector_table(self.session)
+        await vector.delete_vector_chunks(self.session, chunk_ids)
+
+        for row in rows:
+            await self.session.delete(row)
+
+        await self.session.commit()
+        return len(rows)

@@ -17,6 +17,7 @@ from ev.tools.alerts_tool import AlertsTool
 from ev.tools.brief_tool import BriefTool
 from ev.tools.calendar_prep_tool import CalendarPrepTool
 from ev.tools.draft_tools import DraftCommitTool, DraftPrTool, DraftReplyTool
+from ev.tools.memory_tool import MemoryTool, RememberTool
 from ev.tools.obligations_tool import ObligationsTool
 from ev.tools.people_tool import PeopleTool
 from ev.tools.prep_tool import PrepTool
@@ -135,6 +136,17 @@ class PrepRequest(BaseModel):
     title: str | None = None
     project: str | None = None
     time: str | None = None
+
+
+class MemorySearchRequest(BaseModel):
+    query: str
+    project: str | None = None
+    k: int = 5
+
+
+class RememberRequest(BaseModel):
+    text: str
+    project: str | None = None
 
 
 class ListFilterRequest(BaseModel):
@@ -277,6 +289,30 @@ async def prep_endpoint(req: PrepRequest):
             project_name=req.project,
             time=req.time,
         )
+        return result
+
+
+@app.post("/memory")
+async def memory_endpoint(req: MemorySearchRequest):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        registry = ToolRegistry(store)
+        registry.register(MemoryTool())
+        result = await registry.get("memory").run(
+            query=req.query,
+            project_name=req.project,
+            k=req.k,
+        )
+        return result
+
+
+@app.post("/remember")
+async def remember_endpoint(req: RememberRequest):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        tool = RememberTool()
+        tool.bind_store(store)
+        result = await tool.run(text=req.text, project_name=req.project)
         return result
 
 

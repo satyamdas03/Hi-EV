@@ -102,5 +102,7 @@ async def delete_vector_chunks(
     """Remove vector entries for the given chunk ids."""
     if not chunk_ids:
         return
-    stmt = text(f"DELETE FROM {VEC_TABLE} WHERE rowid IN ({', '.join(map(str, chunk_ids))})")
-    await conn.execute(stmt)
+    placeholders = ", ".join(f":id_{idx}" for idx in range(len(chunk_ids)))
+    stmt = text(f"DELETE FROM {VEC_TABLE} WHERE rowid IN ({placeholders})")
+    params = {f"id_{idx}": chunk_id for idx, chunk_id in enumerate(chunk_ids)}
+    await conn.execute(stmt, params)

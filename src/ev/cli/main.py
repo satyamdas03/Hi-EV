@@ -15,6 +15,7 @@ from ev.tools.alerts_tool import AlertsTool
 from ev.tools.brief_tool import BriefTool
 from ev.tools.calendar_prep_tool import CalendarPrepTool
 from ev.tools.draft_tools import DraftCommitTool, DraftPrTool, DraftReplyTool
+from ev.tools.memory_tool import RememberTool
 from ev.tools.obligations_tool import ObligationsTool
 from ev.tools.people_tool import PeopleTool
 from ev.tools.prep_tool import PrepTool
@@ -78,6 +79,22 @@ def research(query: str):
                 click.echo("\nSources:")
                 for idx, source in enumerate(result["sources"], 1):
                     click.echo(f"  [{idx}] {source['title']} — {source['url']}")
+
+    asyncio.run(_run())
+
+
+@cli.command()
+@click.argument("text")
+@click.option("--project", help="Project tag")
+def remember(text: str, project: str | None):
+    """Store a user sentence in semantic memory."""
+    async def _run():
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            tool = RememberTool()
+            tool.bind_store(store)
+            result = await tool.run(text=text, project_name=project)
+            click.echo(result["text"])
 
     asyncio.run(_run())
 
