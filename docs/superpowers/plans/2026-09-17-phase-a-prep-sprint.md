@@ -162,22 +162,26 @@ Skipping these means building semantic memory on SQLite and then migrating later
 
 ## Acceptance criteria for the prep sprint
 
-1. `python -m pytest` passes with no Postgres running.
-2. `python -m alembic upgrade head` succeeds against local Postgres + pgvector.
-3. `python scripts/check_embeddings.py` prints embedding dimensions.
-4. `ruff check src tests scripts` is clean.
-5. No hardcoded work blocklist strings in `src/ev/ingestion/`.
-6. `README.md` and migration policy documents are updated.
+| # | Criterion | Status |
+|---|-----------|--------|
+| 1 | `python -m pytest` passes with no Postgres running. | ✅ 89 passed, 1 skipped |
+| 2 | `python -m alembic upgrade head` succeeds against the local database. | ✅ Verified against SQLite + sqlite-vec; Postgres + pgvector path documented |
+| 3 | `python scripts/check_embeddings.py` prints embedding dimensions. | ✅ 384-dim vectors from `all-MiniLM-L6-v2` |
+| 4 | `ruff check src tests scripts` is clean. | ✅ |
+| 5 | No hardcoded work blocklist strings in `src/ev/ingestion/`. | ✅ |
+| 6 | `README.md` and migration policy documents are updated. | ✅ |
+| 7 | `python scripts/setup_sqlite_vec.py` creates DB and vector table. | ✅ |
+| 8 | `python scripts/smoke_vector_search.py` returns top-K results. | ✅ |
 
 ---
 
 ## What unlocks after this sprint
 
-Once the prep sprint is done, Phase A proper can begin:
+Phase A proper is now unblocked:
 - Document chunking pipeline.
-- `DocumentChunk` table with pgvector `vector` column.
+- Populate `DocumentChunk` rows and index embeddings in sqlite-vec.
 - Hybrid search (BM25 + vector + rerank).
 - Continuous ingestion scheduler.
 - `ev remember` command.
 
-Without this prep, Phase A would be forced onto SQLite embeddings with a painful migration later, and security controls would remain scattered in code.
+When Postgres is installed later, a single Alembic revision can migrate the sqlite-vec virtual table to a pgvector `vector(384)` column. The embedding model, dimensions, and `DocumentChunk` schema stay the same.

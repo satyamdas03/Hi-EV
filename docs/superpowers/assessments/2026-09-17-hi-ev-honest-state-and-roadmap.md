@@ -1,9 +1,10 @@
 # Hi-EV — Honest State Assessment and Roadmap to the Full Vision
 
 > **Date:** 2026-09-17
-> **Commit:** `ac630a3`
+> **Commit:** `3244a0f`
 > **Tests:** 89 passed, 1 skipped
-> **Status:** Web/Voice/HUD MVP complete; full operating-system vision still in early innings.
+> **Ruff:** clean
+> **Status:** Web/Voice/HUD MVP complete; Phase A prep sprint complete; default database is now SQLite + sqlite-vec. Phase A (Ambient Ingestion + Semantic Memory) is unblocked.
 
 ---
 
@@ -23,8 +24,8 @@ This document is an honest inventory of what works, what is half-built, what is 
 | Component | Status | Notes |
 |-----------|--------|-------|
 | FastAPI daemon (`python -m evd`) | ✅ Working | Runs on `127.0.0.1:7345`, health endpoint, CORS for `localhost:5173`. |
-| Async SQLAlchemy + SQLite/Postgres | ✅ Working | SQLite fallback works; Postgres target configured. Tests use SQLite. |
-| Schema migrations (Alembic) | ✅ Working | Base migration covers projects, ingest, deadlines, people, obligations, events, decisions. |
+| Async SQLAlchemy + SQLite/Postgres | ✅ Working | Default is SQLite + sqlite-vec (`~/.hiev/hiev.db`); Postgres + pgvector optional via `EV_DATABASE_URL`. Tests use in-memory SQLite. |
+| Schema migrations (Alembic) | ✅ Working | Base migration `aacdc9089a90` is frozen. New `document_chunks` migration `e65cfe42f3a6` added. Migration discipline documented in `docs/development/migrations.md`. |
 | Lifespan + alert loop | ✅ Partial | Background loop scans deadlines and prints to stdout, but does **not** push to WebSocket yet. |
 | Settings / `.env` | ✅ Working | Pydantic settings, env-file driven, personal-only flag enforced. |
 
@@ -33,7 +34,7 @@ This document is an honest inventory of what works, what is half-built, what is 
 |-----------|--------|-------|
 | `Project`, `Ingest`, `Deadline`, `Person`, `Obligation`, `Decision`, `Event` models | ✅ Real | Upsert helpers exist, idempotency by `(source, source_id)`. |
 | `MemoryStore` CRUD | ✅ Real | Covers ingestion, deadlines, people, obligations, decisions, events. |
-| Vector / semantic document memory | ❌ Missing | No pgvector embeddings, no chunked documents, no hybrid search. |
+| Vector / semantic document memory | ⚠️ Partial scaffolding | `DocumentChunk` model, sqlite-vec vector table, and local embeddings are wired. Chunking pipeline, hybrid search, and `memory_search` tool are not yet implemented. |
 | Episodic log queryability | ⚠️ Partial | `Event` table exists, but no `ev why` retrieval tool or reasoning over history. |
 | Cross-project synthesis | ⚠️ Partial | `brief` aggregates; true synthesis across people/obligations/decisions is hand-rolled, not systematic. |
 
@@ -101,7 +102,7 @@ This document is an honest inventory of what works, what is half-built, what is 
 | Component | Status | Notes |
 |-----------|--------|-------|
 | `personal_only` guard | ✅ Working | Asserted on ingestion sources. |
-| Work blocklist (handles + domains) | ✅ Working | Hardcoded to `financialsimplicity`. |
+| Work blocklist (handles + domains) | ✅ Working | Config-driven via `EV_BLOCKED_HANDLES` / `EV_BLOCKED_DOMAINS` in `.env`. |
 | Privacy levels (`public/personal/sensitive/forbidden`) | ⚠️ Partial | Field exists, but no `forbidden` rejection pipeline or audit event. |
 | Tiered tool enforcement | ⚠️ Partial | Tiers declared; T2/T3 confirmation flows incomplete. |
 | Kill switch | ❌ Missing | Not implemented. |
@@ -167,6 +168,11 @@ We propose **five phases**, each with a clear deliverable and acceptance criteri
 ### Phase A — Ambient Ingestion + Semantic Memory (4–6 weeks)
 **Goal:** EV keeps itself up to date and can answer questions over documents, not just structured rows.
 
+**Prep sprint (completed):**
+- Default database switched to SQLite + sqlite-vec; Postgres + pgvector optional.
+- `DocumentChunk` model, sqlite-vec vector table, and local embedding model wired.
+- Config-driven blocklist and migration discipline in place.
+
 **Deliverables:**
 1. Continuous ingestion scheduler (`ev.daemon.scheduler`):
    - GitHub webhook endpoint + periodic poll.
@@ -175,8 +181,8 @@ We propose **five phases**, each with a clear deliverable and acceptance criteri
    - RSS/changelog feed watcher.
 2. Document memory pipeline:
    - Chunk markdown, PDFs, emails, web pages.
-   - Local embeddings via Ollama / sentence-transformers.
-   - pgvector vector store + BM25 keyword fallback.
+   - Local embeddings via `sentence-transformers` (default `all-MiniLM-L6-v2`, 384-dim).
+   - sqlite-vec vector store + BM25 keyword fallback.
    - Hybrid retrieval with rerank.
 3. Memory query tool:
    - `memory_search(query, project?)` → ranked chunks with provenance.
@@ -278,8 +284,8 @@ We propose **five phases**, each with a clear deliverable and acceptance criteri
 
 ## 6. Technical debt to pay down soon
 
-1. **Migration base revision drift.** We edited the base migration to fix missing columns, which is fine for a pre-production repo but must stop once production data exists. Introduce strict migration discipline after Phase A.
-2. **Work blocklist is hardcoded.** `financialsimplicity` is burned into `GitHubIngestion` and `NotesIngestion`. Move to config.
+1. **Migration base revision drift — RESOLVED.** Migration discipline is now documented in `docs/development/migrations.md`; base revision `aacdc9089a90` is frozen.
+2. **Work blocklist is hardcoded — RESOLVED.** Blocklist is now config-driven via `EV_BLOCKED_HANDLES` / `EV_BLOCKED_DOMAINS`.
 3. **Claude Code spawn is fragile.** `work_on` pipes context into stdin of `claude code`; the CLI likely ignores it. Move to a context file or dedicated launch protocol.
 4. **Redis assumed but optional.** Research tool degrades gracefully, but other features may assume Redis. Make Redis optional everywhere or document it as required.
 5. **Secrets in `.env`.** Move to OS keyring or encrypted store before Phase D.
