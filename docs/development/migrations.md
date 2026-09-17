@@ -1,13 +1,13 @@
 # Migration discipline
 
-Hi-EV uses [Alembic](https://alembic.sqlalchemy.org/) to manage the local Postgres + pgvector schema. This document is the single source of truth for how schema changes are made and how migrations are reviewed.
+Hi-EV uses [Alembic](https://alembic.sqlalchemy.org/) to manage the local database schema. The default database is **SQLite + sqlite-vec**, with **Postgres + pgvector** as an optional upgrade path.
 
 ## Current baseline
 
 - Base revision: `aacdc9089a90_add_deadlines.py` — this revision is **frozen**.
 - Current head revision: see `alembic history`.
-- Local dev database: `hiev`.
-- Test database: tests use an isolated `sqlite+aiosqlite:///:memory:` database and never touch Postgres.
+- Local dev database: defaults to `~/.hiev/hiev.db` (SQLite with sqlite-vec). Set `EV_DATABASE_URL` to `postgresql://localhost:5432/hiev` to use Postgres + pgvector.
+- Test database: tests use an isolated `sqlite+aiosqlite:///:memory:` database and never touch the dev database.
 
 ## Rules
 
@@ -45,7 +45,8 @@ Hi-EV uses [Alembic](https://alembic.sqlalchemy.org/) to manage the local Postgr
    - Data migrations may reference model code by coincidence; schema migrations must not.
 
 7. **Resetting local dev is allowed; resetting prod is not.**
-   - For local dev: `alembic downgrade base` or `dropdb hiev && createdb hiev`.
+   - For SQLite dev: delete the database file and run `python scripts/setup_sqlite_vec.py`.
+   - For Postgres dev: `dropdb hiev && createdb hiev && psql -d hiev -c "CREATE EXTENSION IF NOT EXISTS vector;" && alembic upgrade head`.
    - For any database that contains real memory, write a new migration and follow rule 1.
 
 ## CI check (when CI exists)
@@ -73,11 +74,15 @@ alembic downgrade -1
 # Roll back to the beginning
 alembic downgrade base
 
-# Recreate the dev database from scratch
+# Recreate the Postgres dev database from scratch
 dropdb hiev
 createdb hiev
 psql -d hiev -c "CREATE EXTENSION IF NOT EXISTS vector;"
 alembic upgrade head
+
+# Recreate the SQLite dev database from scratch
+rm ~/.hiev/hiev.db
+python scripts/setup_sqlite_vec.py
 ```
 
 ## Why this matters

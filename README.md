@@ -450,62 +450,52 @@ These are not blocked; they are sequenced after the core is reliable.
 
 ## Setup (Phase 1)
 
-1. Install Python 3.12+.
-2. Install Postgres 16 with pgvector:
-   - **Windows:** use the [EDB Postgres installer](https://www.postgresql.org/download/windows/), or `winget install PostgreSQL.PostgreSQL`.
-   - **WSL2 / Linux:** `sudo apt install postgresql postgresql-contrib pgvector`.
-3. Start Postgres and create the `hiev` database:
-   ```bash
-   # macOS / WSL / Linux
-   pg_ctl start
-   createdb hiev
-   psql -d hiev -c "CREATE EXTENSION IF NOT EXISTS vector;"
+Hi-EV now defaults to **SQLite + sqlite-vec** so it runs without a system Postgres install. Postgres + pgvector remains an optional, fully supported upgrade path.
 
-   # or let the setup script do it
-   python scripts/setup_postgres.py
-   ```
-4. Copy `.env.example` to `.env` and fill in at least:
-   - `EV_DATABASE_URL`
+1. Install Python 3.12+.
+2. Copy `.env.example` to `.env` and fill in at least:
    - `EV_NOTES_PATH`
    - `EV_GITHUB_TOKEN` (for live GitHub ingestion)
    - `EV_BLOCKED_HANDLES` and `EV_BLOCKED_DOMAINS` (JSON arrays of work handles/domains to block)
    - `EV_EMBEDDING_MODEL` (defaults to `all-MiniLM-L6-v2`)
-5. Install the project:
+   - `EV_DATABASE_URL` is optional; if omitted it defaults to a local SQLite file in `~/.hiev/hiev.db`.
+3. Install the project:
    ```bash
    pip install -e ".[dev]"
    ```
-6. Apply the database schema:
+4. Set up the local SQLite database with sqlite-vec:
    ```bash
-   alembic upgrade head
+   python scripts/setup_sqlite_vec.py
    ```
-   See [`docs/development/migrations.md`](docs/development/migrations.md) for migration discipline.
-7. Verify the local embedding model works offline:
+   This applies Alembic migrations and creates the sqlite-vec virtual table.
+5. Verify the local embedding model and vector search:
    ```bash
    python scripts/check_embeddings.py
+   python scripts/smoke_vector_search.py
    ```
-8. Run tests:
+6. Run tests:
    ```bash
    pytest
    ```
-   Tests use an isolated in-memory SQLite database automatically; you do not need Postgres running for them.
-9. Seed your local memory (optional, needs `EV_GITHUB_TOKEN`):
+   Tests use an isolated in-memory SQLite database automatically.
+7. Seed your local memory (optional, needs `EV_GITHUB_TOKEN`):
    ```bash
    python scripts/seed_demo.py
    ```
-10. Run the daemon:
-    ```bash
-    python -m evd
-    # or
-    uvicorn ev.server.api:app --host 127.0.0.1 --port 7345
-    ```
-11. Open the voice/HUD web client:
-    ```bash
-    cd web
-    npm install
-    npm run dev
-    ```
-    Then visit `http://localhost:5173` and speak or type a command such as *"status RoboCAD"*.
-12. Query status from the CLI or API:
+8. Run the daemon:
+   ```bash
+   python -m evd
+   # or
+   uvicorn ev.server.api:app --host 127.0.0.1 --port 7345
+   ```
+9. Open the voice/HUD web client:
+   ```bash
+   cd web
+   npm install
+   npm run dev
+   ```
+   Then visit `http://localhost:5173` and speak or type a command such as *"status RoboCAD"*.
+10. Query status from the CLI or API:
     ```bash
     ev status RoboCAD
     ```
@@ -514,15 +504,28 @@ These are not blocked; they are sequenced after the core is reliable.
     curl -X POST http://127.0.0.1:7345/status -H "Content-Type: application/json" -d '{"project":"RoboCAD"}'
     ```
 
+### Optional: Postgres + pgvector
+
+If you prefer Postgres, install Postgres 16 with pgvector and set `EV_DATABASE_URL`:
+- **Windows:** [EDB Postgres installer](https://www.postgresql.org/download/windows/) or `winget install PostgreSQL.PostgreSQL`.
+- **WSL2 / Linux:** `sudo apt install postgresql postgresql-contrib pgvector`.
+
+```bash
+python scripts/setup_postgres.py
+alembic upgrade head
+```
+
+The same Alembic migrations and vector helpers work on both backends.
+
 ---
 
 ## Status
 
 **Phase 1 — Foundation implemented.**
 
-The local daemon scaffold, Postgres + pgvector memory schema, personal-only security boundary with a config-driven blocklist, GitHub + notes + Gmail + Calendar ingestion, browser voice/HUD shell, and the first `ev status <project>` command are in place and tested.
+The local daemon scaffold, personal-only security boundary with a config-driven blocklist, GitHub + notes + Gmail + Calendar ingestion, browser voice/HUD shell, and the first `ev status <project>` command are in place and tested.
 
-**Phase A prep sprint complete.** Postgres + pgvector wiring, test DB isolation, config-driven blocklist, local embedding model, and migration discipline are in place. The next sprint is **Phase A — Ambient Ingestion + Semantic Memory** (chunking, embeddings, hybrid search, `ev remember`).
+**Phase A prep sprint complete.** The default database is now SQLite + sqlite-vec (zero system dependencies), with Postgres + pgvector as an optional upgrade. Test DB isolation, config-driven blocklist, local embedding model, and migration discipline are in place. The next sprint is **Phase A — Ambient Ingestion + Semantic Memory** (chunking, embeddings, hybrid search, `ev remember`).
 
 ---
 

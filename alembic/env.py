@@ -3,13 +3,11 @@
 import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from ev.config import get_settings
-from ev.db.base import Base
+from ev.db.base import Base, get_engine
 
 # This is the Alembic Config object.
 config = context.config
@@ -34,6 +32,13 @@ def _database_url() -> str:
     return _to_async_url(get_settings().database_url)
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    """Skip sqlite-vec virtual tables that are not part of SQLAlchemy metadata."""
+    if type_ == "table" and reflected:
+        return name in Base.metadata.tables
+    return True
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = _database_url()
@@ -42,6 +47,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -50,21 +56,22 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection: Connection) -> None:
     """Run migrations against a connection."""
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
-    configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = _database_url()
+    """Run migrations in 'online' mode using the app engine.
 
-    connectable = async_engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    For SQLite, this ensures the sqlite-vec extension is loaded so that
+    reflection of virtual tables does not break autogenerate.
+    """
+    connectable = get_engine()
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

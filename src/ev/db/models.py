@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -20,6 +21,31 @@ from .base import Base
 def now_utc() -> datetime:
     """Return the current UTC-aware datetime."""
     return datetime.now(UTC)
+
+
+class DocumentChunk(Base):
+    """Chunked document metadata for semantic memory.
+
+    The actual vector for each chunk lives in the sqlite-vec / pgvector
+    virtual table `vec_document_chunks`, keyed by this integer id.
+    """
+
+    __tablename__ = "document_chunks"
+    __table_args__ = (
+        UniqueConstraint(
+            "source", "source_id", "chunk_index",
+            name="uix_document_chunk_source",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(String(64), nullable=False, index=True)
+    source_id = Column(String(512), nullable=False)
+    project_name = Column(String(128), nullable=True, index=True)
+    chunk_index = Column(Integer, nullable=False, default=0)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
 
 class Ingest(Base):

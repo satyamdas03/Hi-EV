@@ -13,6 +13,11 @@ def _split_csv(value: str | None) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _default_database_url() -> str:
+    """Default to a local SQLite file so EV runs without a system Postgres install."""
+    return f"sqlite+aiosqlite:///{Path.home() / '.hiev' / 'hiev.db'}"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="EV_",
@@ -21,7 +26,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_url: str = "postgresql://localhost:5432/hiev"
+    database_url: str = Field(default_factory=_default_database_url)
     redis_url: str = "redis://localhost:6379/0"
     personal_only: bool = Field(default=True)
     notes_path: PurePosixPath | Path = Field(default=PurePosixPath(Path.home() / "notes"))

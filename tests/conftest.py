@@ -27,6 +27,16 @@ def pytest_configure(config):
         get_settings.cache_clear()
 
 
+def pytest_sessionfinish(session, exitstatus):
+    """Dispose the shared async engine so pytest exits promptly."""
+    with suppress(Exception):
+        import asyncio
+
+        from ev.db.base import engine
+
+        asyncio.run(engine.dispose())
+
+
 @pytest.fixture
 async def seeded_db():
     from ev.db.base import Base, SessionLocal, engine

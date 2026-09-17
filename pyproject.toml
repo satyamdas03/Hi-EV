@@ -27,6 +27,8 @@ dependencies = [
     "google-auth-httplib2>=0.2.0",
     "google-api-python-client>=2.130.0",
     "sentence-transformers>=3.0.0",
+    "aiosqlite>=0.20.0",
+    "sqlite-vec>=0.1.0",
 ]
 
 [project.optional-dependencies]
