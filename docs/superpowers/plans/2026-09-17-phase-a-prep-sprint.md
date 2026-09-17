@@ -3,6 +3,8 @@
 > **Date:** 2026-09-17
 > **Goal:** Clear the blockers so Phase A (Ambient Ingestion + Semantic Memory) can proceed without creating unrecoverable technical debt.
 
+> **Update 2026-09-17:** Postgres 16 + pgvector was not installed in the environment and required user action, so the default local database was switched to **SQLite + sqlite-vec** instead. Postgres + pgvector remains an optional upgrade path via `EV_DATABASE_URL` and `scripts/setup_postgres.py`. All acceptance criteria below were met against the SQLite default.
+
 ---
 
 ## Why this prep sprint first
