@@ -38,7 +38,14 @@ async def test_notes_ingestion_skips_blocklisted_files():
         root = Path(tmp)
         (root / "robocad.md").write_text("# RoboCAD")
         (root / "financialsimplicity.md").write_text("work stuff")
-        ingester = NotesIngestion(Settings(notes_path=root, personal_only=True))
+        ingester = NotesIngestion(
+            Settings(
+                notes_path=root,
+                personal_only=True,
+                blocked_handles=["financialsimplicity"],
+                blocked_domains=["financialsimplicity.com"],
+            )
+        )
         records = await ingester.ingest()
         assert len(records) == 1
         assert records[0]["source_id"].endswith("robocad.md")

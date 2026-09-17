@@ -39,10 +39,7 @@ class GmailIngestion(IngestionSource):
             from ev.google_auth import GoogleAuthHelper
 
             self.service = GoogleAuthHelper(config).get_service("gmail", "v1")
-        self.blocklist = Blocklist(
-            work_handles=["financialsimplicity"],
-            work_domains=["financialsimplicity.com"],
-        )
+        self.blocklist = Blocklist.from_settings(config)
         self.project_tags = [tag.lower() for tag in (project_tags or [])]
 
     def _extract_text(self, message: dict) -> str:

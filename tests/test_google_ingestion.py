@@ -101,7 +101,15 @@ async def test_gmail_ingestion_skips_work_senders():
     service = _gmail_service()
     response = service.users.return_value.messages.return_value.get.return_value
     response.execute.return_value["payload"]["headers"][0]["value"] = "boss@financialsimplicity.com"
-    ingester = GmailIngestion(Settings(personal_only=True, google_enabled=True), service=service)
+    ingester = GmailIngestion(
+        Settings(
+            personal_only=True,
+            google_enabled=True,
+            blocked_handles=["financialsimplicity"],
+            blocked_domains=["financialsimplicity.com"],
+        ),
+        service=service,
+    )
     records, people = await ingester.ingest()
     assert records == []
     assert people == []

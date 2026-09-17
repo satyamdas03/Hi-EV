@@ -1,6 +1,14 @@
-"""Hi-EV async database engine and declarative base."""
+"""Hi-EV async database engine and declarative base.
+
+`engine` and `SessionLocal` are exposed as module-level attributes but are
+resolved lazily so that test fixtures can override `EV_DATABASE_URL` before the
+engine is created.
+"""
+
+from __future__ import annotations
 
 import os
+from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -15,16 +23,31 @@ def _to_async_url(url: str) -> str:
     return url
 
 
-# Allow EV_DATABASE_URL to override the configured settings URL for tests and
-# one-off scripts. In production, get_settings().database_url is the source of
-# truth when no environment override is present.
-_raw_url = os.environ.get("EV_DATABASE_URL") or get_settings().database_url
-DATABASE_URL = _to_async_url(_raw_url)
+def _raw_url() -> str:
+    """Return the raw database URL, allowing EV_DATABASE_URL to override settings."""
+    return os.environ.get("EV_DATABASE_URL") or get_settings().database_url
 
 
 class Base(AsyncAttrs, DeclarativeBase):
     """Declarative base for all Hi-EV ORM models."""
 
 
-engine = create_async_engine(DATABASE_URL, echo=False)
-SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+@lru_cache
+def get_engine():
+    """Return the async SQLAlchemy engine, created lazily on first call."""
+    return create_async_engine(_to_async_url(_raw_url()), echo=False)
+
+
+@lru_cache
+def get_session_maker():
+    """Return the async session maker, created lazily on first call."""
+    return async_sessionmaker(get_engine(), expire_on_commit=False)
+
+
+def __getattr__(name: str):
+    """Lazy module-level access to `engine` and `SessionLocal`."""
+    if name == "engine":
+        return get_engine()
+    if name == "SessionLocal":
+        return get_session_maker()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

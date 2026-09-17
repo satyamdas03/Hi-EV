@@ -17,10 +17,7 @@ class GitHubIngestion(IngestionSource):
     def __init__(self, config: Settings):
         assert_personal_only(config)
         self.token = config.github_token.get_secret_value() if config.github_token else None
-        self.blocklist = Blocklist(
-            work_handles=["financialsimplicity"],
-            work_domains=["financialsimplicity.com"],
-        )
+        self.blocklist = Blocklist.from_settings(config)
         self._repos: list[str] = []
 
     def add_repo(self, owner: str, name: str):

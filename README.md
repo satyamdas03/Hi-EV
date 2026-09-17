@@ -450,40 +450,69 @@ These are not blocked; they are sequenced after the core is reliable.
 
 ## Setup (Phase 1)
 
-1. Install Python 3.12+ and Postgres 16 with pgvector.
-2. Create databases: `createdb hiev` and `createdb hiev_test`.
-3. Copy `.env.example` to `.env` and fill in at least:
+1. Install Python 3.12+.
+2. Install Postgres 16 with pgvector:
+   - **Windows:** use the [EDB Postgres installer](https://www.postgresql.org/download/windows/), or `winget install PostgreSQL.PostgreSQL`.
+   - **WSL2 / Linux:** `sudo apt install postgresql postgresql-contrib pgvector`.
+3. Start Postgres and create the `hiev` database:
+   ```bash
+   # macOS / WSL / Linux
+   pg_ctl start
+   createdb hiev
+   psql -d hiev -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+   # or let the setup script do it
+   python scripts/setup_postgres.py
+   ```
+4. Copy `.env.example` to `.env` and fill in at least:
    - `EV_DATABASE_URL`
    - `EV_NOTES_PATH`
    - `EV_GITHUB_TOKEN` (for live GitHub ingestion)
-4. Install the project:
+   - `EV_BLOCKED_HANDLES` and `EV_BLOCKED_DOMAINS` (JSON arrays of work handles/domains to block)
+   - `EV_EMBEDDING_MODEL` (defaults to `all-MiniLM-L6-v2`)
+5. Install the project:
    ```bash
    pip install -e ".[dev]"
    ```
-5. Run tests:
+6. Apply the database schema:
+   ```bash
+   alembic upgrade head
+   ```
+   See [`docs/development/migrations.md`](docs/development/migrations.md) for migration discipline.
+7. Verify the local embedding model works offline:
+   ```bash
+   python scripts/check_embeddings.py
+   ```
+8. Run tests:
    ```bash
    pytest
    ```
-6. Seed your local memory (optional, needs `EV_GITHUB_TOKEN`):
+   Tests use an isolated in-memory SQLite database automatically; you do not need Postgres running for them.
+9. Seed your local memory (optional, needs `EV_GITHUB_TOKEN`):
    ```bash
    python scripts/seed_demo.py
    ```
-7. Run the daemon:
-   ```bash
-   python -m evd
-   # or
-   uvicorn ev.server.api:app --host 127.0.0.1 --port 7345
-   ```
-8. Query status:
-   ```bash
-   ev status RoboCAD
-   ```
-   Or via the API:
-   ```bash
-   curl -X POST http://127.0.0.1:7345/status -H "Content-Type: application/json" -d '{"project":"RoboCAD"}'
-   ```
-
-> **Note:** If you do not have a local Postgres running, the test suite falls back to an in-memory async SQLite database so the core logic remains testable.
+10. Run the daemon:
+    ```bash
+    python -m evd
+    # or
+    uvicorn ev.server.api:app --host 127.0.0.1 --port 7345
+    ```
+11. Open the voice/HUD web client:
+    ```bash
+    cd web
+    npm install
+    npm run dev
+    ```
+    Then visit `http://localhost:5173` and speak or type a command such as *"status RoboCAD"*.
+12. Query status from the CLI or API:
+    ```bash
+    ev status RoboCAD
+    ```
+    Or via the API:
+    ```bash
+    curl -X POST http://127.0.0.1:7345/status -H "Content-Type: application/json" -d '{"project":"RoboCAD"}'
+    ```
 
 ---
 
@@ -491,7 +520,9 @@ These are not blocked; they are sequenced after the core is reliable.
 
 **Phase 1 — Foundation implemented.**
 
-The local daemon scaffold, Postgres memory schema, personal-only security boundary, GitHub + notes ingestion, and the first `ev status <project>` command are in place and tested. Phase 2 work will add `ev brief`, web research, T1 drafting, and Claude Code spawning.
+The local daemon scaffold, Postgres + pgvector memory schema, personal-only security boundary with a config-driven blocklist, GitHub + notes + Gmail + Calendar ingestion, browser voice/HUD shell, and the first `ev status <project>` command are in place and tested.
+
+**Phase A prep sprint complete.** Postgres + pgvector wiring, test DB isolation, config-driven blocklist, local embedding model, and migration discipline are in place. The next sprint is **Phase A — Ambient Ingestion + Semantic Memory** (chunking, embeddings, hybrid search, `ev remember`).
 
 ---
 

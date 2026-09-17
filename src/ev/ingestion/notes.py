@@ -20,10 +20,7 @@ class NotesIngestion(IngestionSource):
     def __init__(self, config: Settings):
         with personal_only_guard(config):
             self.root = Path(config.notes_path)
-            self.blocklist = Blocklist(
-                work_handles=["financialsimplicity"],
-                work_domains=["financialsimplicity.com"],
-            )
+            self.blocklist = Blocklist.from_settings(config)
 
     async def ingest(self) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []

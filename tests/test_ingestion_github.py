@@ -51,7 +51,14 @@ async def test_github_ingestion_parses_commits(mock_client):
 
 
 def test_github_ingestion_blocks_work_repos():
-    ingester = GitHubIngestion(Settings(personal_only=True, github_token="ghp_test"))
+    ingester = GitHubIngestion(
+        Settings(
+            personal_only=True,
+            github_token="ghp_test",
+            blocked_handles=["financialsimplicity"],
+            blocked_domains=["financialsimplicity.com"],
+        )
+    )
     with pytest.raises(PersonalOnlyError):
         ingester.add_repo("financialsimplicity", "secret-repo")
 

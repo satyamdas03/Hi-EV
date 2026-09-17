@@ -3,8 +3,14 @@
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _split_csv(value: str | None) -> list[str]:
+    if value is None:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 class Settings(BaseSettings):
@@ -32,12 +38,26 @@ class Settings(BaseSettings):
     learningrobotics_path: Path | None = None
     hiev_path: Path | None = None
 
+    # Personal-only boundary: comma-separated handles/domains to never ingest or act on.
+    blocked_handles: list[str] = Field(default_factory=list)
+    blocked_domains: list[str] = Field(default_factory=list)
+
+    # Local embedding model for semantic memory.
+    embedding_model: str = Field(default="all-MiniLM-L6-v2")
+
     # Alert loop / quiet hours
     alert_interval_sec: int = 900
     alert_window_hours: int = 72
     quiet_start: str = "22:00"
     quiet_end: str = "08:00"
     kill_switch: bool = False
+
+    @field_validator("blocked_handles", "blocked_domains", mode="before")
+    @classmethod
+    def _parse_csv(cls, value):
+        if isinstance(value, str):
+            return _split_csv(value)
+        return value or []
 
 
 @lru_cache

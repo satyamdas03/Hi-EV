@@ -23,6 +23,14 @@ class Blocklist:
         self.work_handles = set(work_handles or [])
         self.work_domains = set(work_domains or [])
 
+    @classmethod
+    def from_settings(cls, config: Settings) -> "Blocklist":
+        """Build a blocklist from application settings."""
+        return cls(
+            work_handles=config.blocked_handles,
+            work_domains=config.blocked_domains,
+        )
+
     def is_blocked_repo(self, url_or_name: str) -> bool:
         lower = url_or_name.lower()
         for handle in self.work_handles:
