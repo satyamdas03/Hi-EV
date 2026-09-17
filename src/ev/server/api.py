@@ -13,6 +13,7 @@ from ev.config import get_settings
 from ev.db.base import SessionLocal
 from ev.memory.store import MemoryStore
 from ev.server.chat import ChatSession
+from ev.server.scheduler import _ingest_loop
 from ev.tools.alerts_tool import AlertsTool
 from ev.tools.brief_tool import BriefTool
 from ev.tools.calendar_prep_tool import CalendarPrepTool
@@ -43,14 +44,17 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.active_websockets: set[WebSocket] = set()
     alert_task = asyncio.create_task(_alert_loop(settings))
+    ingest_task = asyncio.create_task(_ingest_loop(settings))
     try:
         yield {}
     finally:
         alert_task.cancel()
-        try:
-            await alert_task
-        except asyncio.CancelledError:
-            pass
+        ingest_task.cancel()
+        for task in (alert_task, ingest_task):
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         for ws in list(getattr(app.state, "active_websockets", set())):
             with suppress(Exception):
                 await ws.close()

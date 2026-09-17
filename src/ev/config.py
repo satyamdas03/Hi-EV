@@ -50,12 +50,18 @@ class Settings(BaseSettings):
     # Local embedding model for semantic memory.
     embedding_model: str = Field(default="all-MiniLM-L6-v2")
 
+    # GitHub repos to monitor for personal ingestion (comma-separated owner/name pairs).
+    github_repos: list[str] = Field(default_factory=list)
+
     # Alert loop / quiet hours
     alert_interval_sec: int = 900
     alert_window_hours: int = 72
     quiet_start: str = "22:00"
     quiet_end: str = "08:00"
     kill_switch: bool = False
+
+    # Background ingestion loop interval in seconds (default 5 minutes).
+    ingest_interval_sec: int = 300
 
     @field_validator("blocked_handles", "blocked_domains", mode="before")
     @classmethod
