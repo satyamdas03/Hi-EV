@@ -2,15 +2,17 @@
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ev.config import get_settings
 from ev.db.base import SessionLocal
 from ev.memory.store import MemoryStore
+from ev.server.chat import ChatSession
 from ev.tools.alerts_tool import AlertsTool
 from ev.tools.brief_tool import BriefTool
 from ev.tools.calendar_prep_tool import CalendarPrepTool
@@ -25,11 +27,20 @@ from ev.tools.work_tool import WorkTool
 
 logger = logging.getLogger(__name__)
 
+# Origins allowed to talk to the local daemon from the browser client.
+_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.settings = settings
+    app.state.active_websockets: set[WebSocket] = set()
     alert_task = asyncio.create_task(_alert_loop(settings))
     try:
         yield {}
@@ -39,6 +50,9 @@ async def lifespan(app: FastAPI):
             await alert_task
         except asyncio.CancelledError:
             pass
+        for ws in list(getattr(app.state, "active_websockets", set())):
+            with suppress(Exception):
+                await ws.close()
 
 
 async def _alert_loop(settings):
@@ -82,6 +96,14 @@ def _in_quiet_hours(start: str, end: str) -> bool:
 
 
 app = FastAPI(title="EV Daemon API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class StatusRequest(BaseModel):
@@ -261,3 +283,27 @@ async def prep_endpoint(req: PrepRequest):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """Bi-directional conversation socket for the Hi-EV web client.
+
+    Accepts transcript messages from the browser and streams back response deltas.
+    Each connection gets its own ChatSession so conversation history is isolated.
+    """
+    await websocket.accept()
+    app.state.active_websockets.add(websocket)
+    session = ChatSession(websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            await session.handle_message(data)
+    except WebSocketDisconnect:
+        logger.debug("WebSocket client disconnected")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("WebSocket error: %s", exc)
+    finally:
+        app.state.active_websockets.discard(websocket)
+        with suppress(Exception):
+            await websocket.close()

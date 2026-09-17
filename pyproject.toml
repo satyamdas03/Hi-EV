@@ -35,6 +35,7 @@ dev = [
     "aiosqlite>=0.20.0",
     "factory-boy>=3.3.0",
     "ruff>=0.4.0",
+    "websockets>=13.0",
 ]
 
 [project.scripts]

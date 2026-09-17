@@ -1,25 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from httpx import ASGITransport, AsyncClient
-
-
-@pytest.fixture
-async def seeded_db():
-    from ev.db.base import Base, SessionLocal, engine
-    from ev.memory.store import MemoryStore
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as session:
-        store = MemoryStore(session)
-        await store.get_or_create_project("RoboCAD", current_phase="Phase 29", repo_path="/repos/RoboCAD")
-        await store.upsert_ingest([{
-            "source": "github_commits", "source_id": "RoboCAD:sha1", "content_hash": "h1",
-            "content": "feat: deliver Phase 29", "project_tag": "robocad", "privacy_level": "personal"
-        }])
-    yield
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
 
 async def test_status_endpoint(seeded_db):
@@ -126,3 +107,15 @@ async def test_calendar_prep_endpoint(mock_llm, seeded_db):
         assert response.status_code == 200
         data = response.json()
         assert "Review call prep packet" in data["prep"]
+
+
+def test_websocket_ping():
+    """A WebSocket connection can be opened and receives a heartbeat."""
+    from fastapi.testclient import TestClient
+
+    from ev.server.api import app
+
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        ws.send_json({"type": "ping"})
+        data = ws.receive_json()
+        assert data["type"] == "pong"

@@ -25,6 +25,8 @@ def upgrade() -> None:
     sa.Column('title', sa.String(length=512), nullable=False),
     sa.Column('due_date', sa.DateTime(timezone=True), nullable=True),
     sa.Column('priority', sa.String(length=32), nullable=True),
+    sa.Column('status', sa.String(length=32), nullable=True),
+    sa.Column('snooze_until', sa.DateTime(timezone=True), nullable=True),
     sa.Column('source', sa.String(length=64), nullable=False),
     sa.Column('source_id', sa.String(length=512), nullable=False),
     sa.Column('project_name', sa.String(length=128), nullable=True),

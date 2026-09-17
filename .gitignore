@@ -159,6 +159,10 @@ models/
 cache/
 embeddings/
 
+# Frontend build artifacts
+web/node_modules/
+web/dist/
+
 # OS
 .DS_Store
 Thumbs.db
