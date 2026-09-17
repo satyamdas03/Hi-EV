@@ -27,3 +27,16 @@ async def test_status_tool_returns_summary(store):
     result = await registry.get("status").run(project="RoboCAD")
     assert "Phase 29" in result
     assert "deliver Phase 29" in result
+
+
+async def test_status_tool_includes_memory_context(store):
+    await store.get_or_create_project("RoboCAD", current_phase="Phase 23")
+    await store.upsert_document_chunks([
+        {"source": "user_memory", "source_id": "m1", "chunk_index": 0,
+         "text": "RoboCAD is targeting full-robot synthesis in Phase 23.", "project_name": "robocad"}
+    ])
+    registry = ToolRegistry(store)
+    registry.register(StatusTool())
+    result = await registry.get("status").run(project="RoboCAD")
+    assert "From memory:" in result
+    assert "full-robot synthesis" in result

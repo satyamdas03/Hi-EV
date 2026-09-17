@@ -75,38 +75,55 @@ class ResearchTool(Tool):
             return
 
     @staticmethod
-    def _build_prompt(query: str, sources: list[dict[str, str]]) -> str:
+    def _build_prompt(query: str, sources: list[dict[str, str]], memory_snippets: list[str] | None = None) -> str:
         source_texts = []
         for idx, source in enumerate(sources, 1):
             source_texts.append(
                 f"[{idx}] {source['title']}\nURL: {source['url']}\n{source['snippet']}"
             )
-        prompt = (
-            f"Answer the question using only the provided web search results. "
-            f"Cite sources with bracket numbers like [1]. Keep the answer concise.\n\n"
-            f"Question: {query}\n\n"
-            f"Search results:\n" + "\n\n".join(source_texts)
-        )
-        return prompt
+        parts: list[str] = []
+        if memory_snippets:
+            parts.extend([
+                "The user has previously noted the following related snippets from their memory:",
+                *(f"- {snippet}" for snippet in memory_snippets),
+                "",
+            ])
+        parts.extend([
+            "Answer the question using the provided web search results and the user's memory snippets above when relevant.",
+            "Cite web sources with bracket numbers like [1]. Keep the answer concise.\n",
+            f"Question: {query}\n",
+            "Search results:\n" + "\n\n".join(source_texts),
+        ])
+        return "\n".join(parts)
+
+    async def _fetch_memory_snippets(self, query: str, k: int = 3) -> list[str]:
+        if self.store is None:
+            return []
+        try:
+            chunks = await self.store.search_document_chunks(query=query, k=k)
+            return [c["text"].replace("\n", " ")[:250] for c in chunks]
+        except Exception:  # noqa: BLE001
+            return []
 
     async def run(self, query: str) -> dict[str, Any]:
         cached = await self._maybe_read_cache(query)
         if cached:
             return cached
 
+        memory_snippets = await self._fetch_memory_snippets(query)
         sources = await self.search.search(query)
         if not sources:
             answer = "EV: I couldn't find any web results for that query."
-            payload = {"query": query, "answer": answer, "sources": []}
+            payload = {"query": query, "answer": answer, "sources": [], "memory_snippets": memory_snippets}
             await self._maybe_write_cache(query, payload)
             return payload
 
-        prompt = self._build_prompt(query, sources)
+        prompt = self._build_prompt(query, sources, memory_snippets=memory_snippets)
         answer = await self.llm.complete(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=1024,
         )
-        payload = {"query": query, "answer": answer, "sources": sources}
+        payload = {"query": query, "answer": answer, "sources": sources, "memory_snippets": memory_snippets}
         await self._maybe_write_cache(query, payload)
         return payload

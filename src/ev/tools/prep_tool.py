@@ -87,6 +87,19 @@ class PrepTool(Tool):
             if "error" not in summary:
                 project_context = summary["summary_text"]
 
+        # Semantic memory context for the event/project
+        memory_snippets: list[str] = []
+        try:
+            memory_query = " ".join(filter(None, [event_title, project_name or ""]))
+            chunks = await self.store.search_document_chunks(
+                query=memory_query,
+                project_name=project_name.lower() if project_name else None,
+                k=3,
+            )
+            memory_snippets = [c["text"].replace("\n", " ")[:200] for c in chunks]
+        except Exception:  # noqa: BLE001
+            memory_snippets = []
+
         # Nearby obligations
         obligations = await self.store.list_obligations(status="open")
         nearby_obligations = [
@@ -101,6 +114,7 @@ class PrepTool(Tool):
             attendees=attendees,
             recent_emails=recent_emails,
             project_context=project_context,
+            memory_snippets=memory_snippets,
             obligations=nearby_obligations,
         )
         prep = await self._llm.complete(
@@ -188,6 +202,7 @@ class PrepTool(Tool):
         attendees: list[dict],
         recent_emails: list[dict],
         project_context: str,
+        memory_snippets: list[str],
         obligations: list[str],
     ) -> str:
         parts = [
@@ -203,6 +218,11 @@ class PrepTool(Tool):
 
         if project_context:
             parts.extend(["", f"Project context: {project_context}"])
+
+        if memory_snippets:
+            parts.extend(["", "Related memory:"])
+            for snippet in memory_snippets[:5]:
+                parts.append(f"- {snippet}")
 
         if recent_emails:
             parts.extend(["", "Recent emails from attendees:"])
