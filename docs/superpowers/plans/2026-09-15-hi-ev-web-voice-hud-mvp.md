@@ -36,8 +36,12 @@ The Hi-EV backend is solid through Phase 3 (82 tests passing, Gmail/Calendar liv
 - Media proxy / SSRF-safe page rendering.
 - Model-authored HTML blades/panels.
 - Hand tracking / touchless gestures.
-- Persistent chat history.
-- Server-initiated proactive alerts over WebSocket.
+- Persistent chat history (planned in Phase C).
+- Server-initiated proactive alerts over WebSocket (planned in Phase C).
+
+## Post-MVP updates
+
+- **Streaming response UI (Phase B):** `web/src/ui/Chat.tsx` now renders streaming deltas with an animated caret, phase badge, and a stop button; backend supports `type: stop` abort.
 
 ## Order of work
 
@@ -60,7 +64,8 @@ The Hi-EV backend is solid through Phase 3 (82 tests passing, Gmail/Calendar liv
   - Known intents: `status`, `brief`, `research`, `deadlines`, `alerts`, `people`, `obligations`, `prep`, `work`, `draft`, `chat`.
   - For tool intents, extract parameters with a lightweight LLM prompt or regex fallback, then call the same `ToolRegistry` + tools used by REST endpoints.
   - For `chat`, answer from general knowledge using `LLMClient`.
-  - Stream the final response to the WebSocket as `{type: "delta", text: "..."}` chunks. For MVP we send the whole response in one delta for simplicity; true streaming can be added once the LLM client supports it.
+  - Stream the final response to the WebSocket as `{type: "delta", text: "..."}` chunks. ✅ Done; fast chat now streams word-by-word.
+  - Handle `type: stop` to abort an in-progress stream and emit `done`. ✅ Done.
 - Register the chat handler in `src/ev/server/api.py` lifespan so sessions can be cleaned up on shutdown.
 - **Tests:** mock `LLMClient` and tool runs; assert `ChatSession` emits correct tool result as a WebSocket message.
 

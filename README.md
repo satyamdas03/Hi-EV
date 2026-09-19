@@ -360,7 +360,7 @@ Instantly:
 **Goal:** EV can safely execute more actions automatically and we can measure quality.
 
 **Deliverables:**
-1. Eval harness: 100–200 golden questions with known answers from your actual life and projects.
+1. Eval harness: 100–200 golden questions with known answers from your actual life and projects. ✅ Phase B seeded the harness with category-level golden cases; Phase 4 expands coverage.
 2. Voice and CLI confirmation flow for T2 actions.
 3. Automated T1 actions: CI failure → diagnosis → draft PR; stale issue → gentle nudge; test run → report delta.
 4. Error recovery and retry logic.
@@ -372,6 +372,16 @@ Instantly:
 - T2 confirmation works by voice and CLI.
 - A simulated CI failure produces a draft fix PR within 5 minutes.
 - Cost per query is capped and visible.
+
+### Phase C — Proactive Alerts + Persistent Context (3–4 weeks)
+
+**Goal:** EV stops being purely reactive; it pushes alerts, remembers conversation threads, and surfaces what matters before it is too late.
+
+**Deliverables:**
+1. Server-initiated proactive alerts over WebSocket.
+2. Persistent chat threads stored in local SQLite.
+3. Morning brief scheduler.
+4. Optional Telegram relay via cloud relay.
 
 ### Phase 5+ — Advanced features (later)
 
@@ -525,7 +535,9 @@ The same Alembic migrations and vector helpers work on both backends.
 
 The local daemon scaffold, personal-only security boundary with a config-driven blocklist, GitHub + notes + Gmail + Calendar ingestion, browser voice/HUD shell, and the first `ev status <project>` command are in place and tested.
 
-**Phase A — Ambient Ingestion + Semantic Memory implemented.** Document chunking, local `all-MiniLM-L6-v2` embeddings, sqlite-vec hybrid search, the `ev remember` command, memory/remember API + WebSocket intents, and a background daemon ingestion scheduler are complete and pushed. `StatusTool`, `PrepTool`, and `ResearchTool` now ground their answers in document memory. The next phase is **Phase B — Reasoning Router + Eval Harness**.
+**Phase A — Ambient Ingestion + Semantic Memory implemented.** Document chunking, local `all-MiniLM-L6-v2` embeddings, sqlite-vec hybrid search, the `ev remember` command, memory/remember API + WebSocket intents, and a background daemon ingestion scheduler are complete and pushed. `StatusTool`, `PrepTool`, and `ResearchTool` ground their answers in document memory.
+
+**Phase B — Reasoning Router + Eval Harness + Streaming UI implemented.** The reasoning router, source-trust propagation, guard model, streaming LLM fast path, backend stop/abort control, eval harness, and extraordinary frontend streaming UI are complete and pushed to `origin/main`. Full test suite: **181 passed, 1 skipped**. The next phase is **Phase C — Proactive Alerts + Persistent Context**.
 
 ---
 
