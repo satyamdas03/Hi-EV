@@ -14,7 +14,7 @@ from ev.config import get_settings
 from ev.db.base import SessionLocal
 from ev.llm.client import LLMClient
 from ev.memory.store import MemoryStore
-from ev.reasoning.router import RequestContext, route_request
+from ev.reasoning.router import RequestContext, Route, route_request
 from ev.security.guard import Guard, GuardStatus
 from ev.tools.alerts_tool import AlertsTool
 from ev.tools.brief_tool import BriefTool
@@ -103,8 +103,15 @@ class ChatSession:
             )
             await self._send_json({"type": "phase", "phase": f"route:{route.path.value}"})
 
+        raw_intent, args = await self._classify_intent(text)
+        intent = _INTENT_ALIASES.get(raw_intent, raw_intent)
+
+        if intent == "chat" and self._should_stream(route):
+            await self._stream_chat(text)
+            return
+
         try:
-            response = await self._resolve(text, guard_decision=guard_decision, route=route)
+            response = await self._resolve_from_intent(intent, args, text, guard_decision=guard_decision, route=route)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Chat resolution failed: %s", exc)
             response = f"EV had a problem handling that: {exc}"
@@ -117,10 +124,56 @@ class ChatSession:
         await self._send_json({"type": "delta", "text": response})
         await self._send_json({"type": "done"})
 
+    def _should_stream(self, route) -> bool:
+        if not self.settings.llm_stream_enabled:
+            return False
+        # When the router is disabled, default to the existing non-streaming
+        # behavior unless the feature flag is on. With the router enabled,
+        # only the fast chat path streams.
+        if route is None:
+            return False
+        return route.path == Route.FAST
+
+    async def _stream_chat(self, text: str) -> None:
+        """Stream a chat answer word-by-word over the WebSocket."""
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            *self.history,
+        ]
+        await self._send_json({"type": "phase", "phase": "streaming"})
+        pieces: list[str] = []
+        try:
+            async for delta in self.client.complete_stream(messages, temperature=0.7, max_tokens=1024):
+                if delta:
+                    await self._send_json({"type": "delta", "text": delta})
+                    pieces.append(delta)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Streaming chat failed: %s", exc)
+            err = f"EV had a problem streaming that: {exc}"
+            await self._send_json({"type": "delta", "text": err})
+            pieces.append(err)
+
+        response = "".join(pieces)
+        self.history.append({"role": "assistant", "content": response})
+        # Keep history bounded.
+        if len(self.history) > 20:
+            self.history = self.history[-20:]
+
+        await self._send_json({"type": "done"})
+
     async def _resolve(self, text: str, guard_decision, route=None) -> str:
         raw_intent, args = await self._classify_intent(text)
         intent = _INTENT_ALIASES.get(raw_intent, raw_intent)
+        return await self._resolve_from_intent(intent, args, text, guard_decision=guard_decision, route=route)
 
+    async def _resolve_from_intent(
+        self,
+        intent: str,
+        args: dict[str, Any],
+        text: str,
+        guard_decision,
+        route=None,
+    ) -> str:
         if intent == "chat":
             return await self._answer_chat(text, route=route)
 

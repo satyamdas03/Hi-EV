@@ -183,3 +183,53 @@ async def test_chat_router_phase_when_enabled(mock_llm_client, mock_ws, seeded_d
 
     calls = [c.args[0] for c in mock_ws.send_json.await_args_list]
     assert {"type": "phase", "phase": "route:fast"} in calls
+
+
+@patch("ev.server.chat.LLMClient")
+async def test_chat_streams_fast_chat_path(mock_llm_client, mock_ws):
+    from ev.config import Settings
+    from ev.server.chat import ChatSession
+
+    async def _stream(*args, **kwargs):
+        for word in ["Hello,", " I", " am", " EV."]:
+            yield word
+
+    llm = MagicMock()
+    llm.complete = AsyncMock(return_value='{"tool": "chat", "args": {}}')
+    llm.complete_stream = _stream
+    mock_llm_client.return_value = llm
+
+    session = ChatSession(mock_ws)
+    session.settings = Settings(enable_reasoning_router=True, llm_stream_enabled=True)
+    await session.handle_message({"type": "transcript", "text": "hello"})
+
+    calls = [c.args[0] for c in mock_ws.send_json.await_args_list]
+    assert {"type": "phase", "phase": "route:fast"} in calls
+    assert {"type": "phase", "phase": "streaming"} in calls
+    deltas = [c["text"] for c in calls if c.get("type") == "delta"]
+    assert deltas == ["Hello,", " I", " am", " EV."]
+    assert calls[-1] == {"type": "done"}
+
+
+@patch("ev.server.chat.LLMClient")
+async def test_chat_non_streaming_when_stream_disabled(mock_llm_client, mock_ws):
+    from ev.config import Settings
+    from ev.server.chat import ChatSession
+
+    llm = MagicMock()
+    llm.complete = AsyncMock(
+        side_effect=[
+            '{"tool": "chat", "args": {}}',
+            "Hello, I am EV.",
+        ]
+    )
+    mock_llm_client.return_value = llm
+
+    session = ChatSession(mock_ws)
+    session.settings = Settings(enable_reasoning_router=True, llm_stream_enabled=False)
+    await session.handle_message({"type": "transcript", "text": "hello"})
+
+    calls = [c.args[0] for c in mock_ws.send_json.await_args_list]
+    assert {"type": "phase", "phase": "streaming"} not in calls
+    delta = next(c for c in calls if c.get("type") == "delta")
+    assert "Hello, I am EV." in delta["text"]
