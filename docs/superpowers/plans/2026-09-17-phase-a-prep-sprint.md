@@ -5,6 +5,8 @@
 
 > **Update 2026-09-17:** Postgres 16 + pgvector was not installed in the environment and required user action, so the default local database was switched to **SQLite + sqlite-vec** instead. Postgres + pgvector remains an optional upgrade path via `EV_DATABASE_URL` and `scripts/setup_postgres.py`. All acceptance criteria below were met against the SQLite default.
 
+> **Update 2026-09-17 (later):** Phase A proper is now complete and pushed to `origin/main`. See [`memory/hi-ev-phase-a-semantic-memory.md`](../../../memory/hi-ev-phase-a-semantic-memory.md) for the final shipped state.
+
 ---
 
 ## Why this prep sprint first

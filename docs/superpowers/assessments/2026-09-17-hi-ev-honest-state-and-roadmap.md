@@ -1,10 +1,10 @@
 # Hi-EV — Honest State Assessment and Roadmap to the Full Vision
 
 > **Date:** 2026-09-17
-> **Commit:** `3244a0f`
-> **Tests:** 89 passed, 1 skipped
+> **Commit:** `40aaa2b`
+> **Tests:** 115 passed, 1 skipped
 > **Ruff:** clean
-> **Status:** Web/Voice/HUD MVP complete; Phase A prep sprint complete; default database is now SQLite + sqlite-vec. Phase A (Ambient Ingestion + Semantic Memory) is unblocked.
+> **Status:** Web/Voice/HUD MVP complete; Phase A — Ambient Ingestion + Semantic Memory complete and pushed. Phase B — Reasoning Router + Eval Harness is next.
 
 ---
 
@@ -34,7 +34,7 @@ This document is an honest inventory of what works, what is half-built, what is 
 |-----------|--------|-------|
 | `Project`, `Ingest`, `Deadline`, `Person`, `Obligation`, `Decision`, `Event` models | ✅ Real | Upsert helpers exist, idempotency by `(source, source_id)`. |
 | `MemoryStore` CRUD | ✅ Real | Covers ingestion, deadlines, people, obligations, decisions, events. |
-| Vector / semantic document memory | ⚠️ Partial scaffolding | `DocumentChunk` model, sqlite-vec vector table, and local embeddings are wired. Chunking pipeline, hybrid search, and `memory_search` tool are not yet implemented. |
+| Vector / semantic document memory | ✅ Working | `DocumentChunk` model, sqlite-vec vector table, local embeddings, chunking pipeline, hybrid search, `memory_search` tool, and `ev remember` command are implemented. |
 | Episodic log queryability | ⚠️ Partial | `Event` table exists, but no `ev why` retrieval tool or reasoning over history. |
 | Cross-project synthesis | ⚠️ Partial | `brief` aggregates; true synthesis across people/obligations/decisions is hand-rolled, not systematic. |
 
@@ -66,7 +66,7 @@ This document is an honest inventory of what works, what is half-built, what is 
 | `draft_reply` | T1 | ✅ Works. |
 | `work_on` (spawn Claude Code) | T1 | ⚠️ Spawns process but pipes context into stdin; Claude Code may not consume it cleanly. |
 | `send_email`, `push_branch`, `merge_pr` | T2/T3 | ❌ Not implemented. |
-| `remember` explicit capture | T1 | ❌ No CLI command or tool yet. |
+| `remember` explicit capture | T1 | ✅ `ev remember "..."` and `POST /remember` implemented; stores as `DocumentChunk`. |
 | `kill-switch` | T3 guard | ❌ Not implemented. |
 | Tier enforcement in WebSocket | ⚠️ | ChatSession refuses T2/T3, but confirmation flow for T2 is not wired end-to-end. |
 
@@ -116,20 +116,20 @@ This document is an honest inventory of what works, what is half-built, what is 
 
 | # | Superpower | Maturity | Honest verdict |
 |---|------------|----------|----------------|
-| 1 | Ambient awareness | 3/10 | Ingests sources when asked, but no continuous watcher, no ranking, no working-set model. |
+| 1 | Ambient awareness | 5/10 | Background ingestion scheduler now polls notes, GitHub, Gmail, Calendar; long-form content is chunked and indexed. No file-system watcher or webhooks yet. |
 | 2 | Voice-first command | 5/10 | Browser voice loop works end-to-end, but push-to-talk and cloud STT/TTS limit the "ambient" feel. |
-| 3 | Project memory | 5/10 | Projects, deadlines, people, obligations exist; status answers are real. No vector memory, no deep dossier. |
-| 4 | Autonomous execution | 3/10 | T1 drafting + Claude Code spawn work, but no scheduler, no eval harness, no safe T2 confirmation flow. |
-| 5 | Cross-project synthesis | 2/10 | `brief` aggregates; true synthesis across commitments/people is not systematic. |
-| 6 | Proactive alerts | 2/10 | Deadline watcher runs, but alerts only print to stdout. No push to HUD/phone. |
+| 3 | Project memory | 7/10 | Structured facts + document chunks + hybrid search; `status`/`prep`/`research` ground answers in memory. No deep dossier reasoning yet. |
+| 4 | Autonomous execution | 4/10 | T1 drafting + Claude Code spawn + scheduler work, but no eval harness and no safe T2 confirmation flow. |
+| 5 | Cross-project synthesis | 4/10 | Memory snippets now surface across tools; true synthesis across commitments/people is still hand-rolled. |
+| 6 | Proactive alerts | 3/10 | Ingestion scheduler runs; deadline watcher still only prints to stdout. No push to HUD/phone. |
 | 7 | Conversation continuity | 2/10 | WebSocket session has rolling history, but no persistent thread memory or preference learning. |
 | 8 | Tool-authoring loop | 0/10 | Not started. |
 | 9 | Holographic HUD | 3/10 | Visual shell exists, but it displays text only. No floating blades, no gaze/click-driven UI. |
 | 10 | Local, private, inspectable | 5/10 | Runs local, memory local, provenance attached to ingest. But no `ev why`, no kill switch, no audit query UI. |
 
-**Average maturity: ~3.0/10.**
+**Average maturity: ~4.0/10.**
 
-The MVP proved the architecture. The operating-system layer is still ahead.
+The MVP proved the architecture. Phase A made EV semantically literate and self-updating; the remaining operating-system layer (reasoning router, eval harness, proactive push, safe autonomy) is next.
 
 ---
 
@@ -138,8 +138,8 @@ The MVP proved the architecture. The operating-system layer is still ahead.
 ### Gap 1: Continuous ingestion, not on-demand
 Today you must run ingestion manually or via one-off scripts. The vision requires EV to *watch* sources continuously: GitHub webhooks, file-system watcher on notes, Gmail/Calendar poll loops, RSS feeds. Without this, EV cannot be "ambient."
 
-### Gap 2: No document / semantic memory
-All memory is structured rows or raw `Ingest.content` strings. There is no chunked, embedded, reranked document store. So EV cannot answer "what did the README say about actuator sizing?" or "summarize the last three design docs."
+### Gap 2: Document / semantic memory — LARGELY CLOSED
+`DocumentChunk` + sqlite-vec + hybrid search + grounded tools now answer "what did the README say about actuator sizing?" from indexed documents. What remains is deeper reasoning over documents (summaries, compare/contrast, trend detection) and a true reranker.
 
 ### Gap 3: No reasoning router
 Every request goes through the same simple intent classifier → single tool path. The vision needs a router that picks between fast retrieval, agent loop, or deliberate planning, with cost/latency budgets.
@@ -165,7 +165,7 @@ EV is a browser tab. The vision needs a daemon that is present without a browser
 
 We propose **five phases**, each with a clear deliverable and acceptance criteria. The phases are ordered by dependency and user-facing impact.
 
-### Phase A — Ambient Ingestion + Semantic Memory (4–6 weeks)
+### Phase A — Ambient Ingestion + Semantic Memory ✅ COMPLETE
 **Goal:** EV keeps itself up to date and can answer questions over documents, not just structured rows.
 
 **Prep sprint (completed):**
@@ -173,26 +173,29 @@ We propose **five phases**, each with a clear deliverable and acceptance criteri
 - `DocumentChunk` model, sqlite-vec vector table, and local embedding model wired.
 - Config-driven blocklist and migration discipline in place.
 
-**Deliverables:**
-1. Continuous ingestion scheduler (`ev.daemon.scheduler`):
-   - GitHub webhook endpoint + periodic poll.
-   - File-system watcher on notes vault.
-   - Gmail/Calendar poll loops (15 min / 1 hour).
-   - RSS/changelog feed watcher.
+**Deliverables (completed):**
+1. Continuous ingestion scheduler (`src/ev/server/scheduler.py`):
+   - Periodic poll loop wired into FastAPI lifespan.
+   - Runs `NotesIngestion`, `GitHubIngestion` (when `EV_GITHUB_REPOS` configured), `GmailIngestion` + `CalendarIngestion` (when `EV_GOOGLE_ENABLED=true`).
+   - Long-form records are chunked and indexed into sqlite-vec automatically.
+   - File-system watcher, RSS/changelog watcher, and GitHub webhooks remain future work.
 2. Document memory pipeline:
-   - Chunk markdown, PDFs, emails, web pages.
-   - Local embeddings via `sentence-transformers` (default `all-MiniLM-L6-v2`, 384-dim).
-   - sqlite-vec vector store + BM25 keyword fallback.
-   - Hybrid retrieval with rerank.
+   - Chunk markdown, notes, emails, calendar details, web pages via `src/ev/memory/chunks.py`.
+   - Local embeddings via `sentence-transformers` (`all-MiniLM-L6-v2`, 384-dim).
+   - sqlite-vec vector store + SQL keyword overlap + recency/source-type rerank.
 3. Memory query tool:
-   - `memory_search(query, project?)` → ranked chunks with provenance.
-   - Update `status` / `prep` / `research` to retrieve from document memory.
-4. `ev remember "..."` command → stores explicit facts as `Decision`/`Event`/`Obligation`.
+   - `MemoryTool` / `RememberTool` in `src/ev/tools/memory_tool.py`.
+   - `POST /memory` and `POST /remember` API endpoints.
+   - WebSocket intents: `memory`, `search_memory`, `find_memory`, `recall`, `remember`, `save_memory`.
+   - `StatusTool`, `PrepTool`, `ResearchTool` retrieve and inject document-memory snippets.
+4. `ev remember "..."` command → stores explicit facts as `DocumentChunk` rows.
 
-**Acceptance criteria:**
-- Running `ev ingest` or waiting 15 minutes updates memory without manual intervention.
-- `ev research "what does my notes vault say about X?"` returns cited chunks.
-- `ev status RoboCAD` includes relevant recent notes and docs, not just counts.
+**Verification:**
+- `python -m pytest` → 115 passed, 1 skipped.
+- `python scripts/smoke_semantic_memory.py` passes end-to-end.
+- `ruff check .` clean.
+
+**What remains for later:** file-system watcher, RSS/changelog feeds, true cross-document synthesis, dedicated reranker model.
 
 ### Phase B — Reasoning Router + Eval Harness (3–4 weeks)
 **Goal:** EV chooses the right reasoning depth, and we can measure quality.
@@ -309,24 +312,22 @@ We propose **five phases**, each with a clear deliverable and acceptance criteri
 
 ## 8. What to build next (recommended immediate sprint)
 
-If the next sprint is 1–2 weeks, focus on the highest-leverage gap: **ambient ingestion + semantic memory**. This unlocks everything else.
+Phase A is complete. The next highest-leverage work is **Phase B — Reasoning Router + Eval Harness** so we can measure whether prompt/model changes make EV better or worse, and choose the right reasoning depth per request.
 
-**Sprint goal:** EV keeps memory fresh without manual commands, and can answer questions over notes/docs with citations.
+**Sprint goal:** EV picks fast/agent/deliberate paths automatically, streams responses, and every prompt change is measured against golden questions.
 
 **Tasks:**
-1. Add `scripts/ingest_all.py` that runs GitHub + notes + Gmail + Calendar ingestion in one pass.
-2. Add a scheduler loop in the daemon that runs ingestion every 15–60 minutes.
-3. Add document chunking + local embeddings (`sentence-transformers` or Ollama `nomic-embed-text`).
-4. Add `MemoryStore.search_documents(query, project?)` using keyword + vector hybrid.
-5. Update `StatusTool` to include top document chunks in its context prompt.
-6. Add `ev remember <fact>` CLI command and WebSocket intent.
-7. Add eval questions for status/research accuracy.
+1. Add `ev.reasoning.router` with fast/agent/deliberate paths and cost/latency budgets.
+2. Implement streaming completions in `LLMClient` and the WebSocket `/ws` path.
+3. Create an eval harness (`tests/eval/`) with 100+ golden questions grounded in real memory.
+4. Add metrics: hallucination rate, refusal rate, latency, cost.
+5. Add a guard model / prompt-injection classifier for untrusted external content.
 
 **Acceptance criteria:**
-- `python scripts/ingest_all.py` updates all sources in <60 seconds.
-- After ingestion, `ev status RoboCAD` references actual recent note content.
-- `ev research "from my notes: what did I decide about X?"` returns cited chunks.
-- New eval harness runs with ≥70% pass rate on golden questions.
+- `pytest tests/eval/` produces a score report.
+- A prompt change that lowers the eval score is caught before merge.
+- WebSocket responses stream word-by-word.
+- T2/T3 tool confirmation flow is designed (implementation in Phase C/D).
 
 ---
 
@@ -335,8 +336,8 @@ If the next sprint is 1–2 weeks, focus on the highest-leverage gap: **ambient 
 | Metric | Target by end of Phase A | How to measure |
 |--------|--------------------------|----------------|
 | Ingestion freshness | <15 minutes for notes, <1 hour for GitHub | Scheduler intervals + last ingest timestamp. |
-| Status answer accuracy | ≥80% on golden status questions | Eval harness. |
-| Research citation correctness | ≥85% citations point to real source | Manual spot-check + eval. |
+| Status answer accuracy | ≥80% on golden status questions | Eval harness (target for Phase B). |
+| Research citation correctness | ≥85% citations point to real source | Manual spot-check + eval (target for Phase B). |
 | Intent classification accuracy | ≥90% | Labeled transcript test set. |
 | End-to-end voice latency | <5s from speech stop to first delta | Smoke test timing. |
 | WebSocket uptime | 99.9% local | Smoke test over hours. |

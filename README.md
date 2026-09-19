@@ -525,7 +525,7 @@ The same Alembic migrations and vector helpers work on both backends.
 
 The local daemon scaffold, personal-only security boundary with a config-driven blocklist, GitHub + notes + Gmail + Calendar ingestion, browser voice/HUD shell, and the first `ev status <project>` command are in place and tested.
 
-**Phase A prep sprint complete.** The default database is now SQLite + sqlite-vec (zero system dependencies), with Postgres + pgvector as an optional upgrade. Test DB isolation, config-driven blocklist, local embedding model, and migration discipline are in place. The next sprint is **Phase A — Ambient Ingestion + Semantic Memory** (chunking, embeddings, hybrid search, `ev remember`).
+**Phase A — Ambient Ingestion + Semantic Memory implemented.** Document chunking, local `all-MiniLM-L6-v2` embeddings, sqlite-vec hybrid search, the `ev remember` command, memory/remember API + WebSocket intents, and a background daemon ingestion scheduler are complete and pushed. `StatusTool`, `PrepTool`, and `ResearchTool` now ground their answers in document memory. The next phase is **Phase B — Reasoning Router + Eval Harness**.
 
 ---
 

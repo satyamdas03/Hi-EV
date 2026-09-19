@@ -6,7 +6,7 @@ metadata:
   type: reference
   originSessionId: c391edcd-a13c-4b1e-a13a-14088c80d1a3
   created: 2026-09-15
-  modified: 2026-09-17T02:45:00+00:00
+  modified: 2026-09-17
 ---
 
 # EV / Hi-EV — Full Session Recovery Dossier
@@ -44,23 +44,26 @@ Key directories and files:
 - `src/ev/daemon/daemon.py` — FastAPI daemon runner.
 - `src/ev/server/api.py` — FastAPI routes.
 - `src/ev/server/chat.py` — WebSocket `/ws` endpoint and LLM intent classifier.
-- `src/ev/config.py` — Pydantic settings; includes blocklist, embedding model, Google OAuth, alert-loop flags, repo paths.
+- `src/ev/server/scheduler.py` — background ingestion scheduler, wired into FastAPI lifespan.
+- `src/ev/config.py` — Pydantic settings; includes blocklist, embedding model, Google OAuth, alert-loop flags, repo paths, `ingest_interval_sec`, `github_repos`.
 - `src/ev/db/base.py` — lazy async engine/session factories; SQLite + sqlite-vec default, Postgres optional.
 - `src/ev/db/models.py` — SQLAlchemy models: `DocumentChunk`, `Ingest`, `Project`, `Event`, `Deadline`, `Person`, `Obligation`, `Decision`.
 - `src/ev/db/vector.py` — sqlite-vec virtual table helpers for semantic memory.
 - `src/ev/embeddings.py` — local `sentence-transformers` embedding model wrapper.
-- `src/ev/memory/store.py` — `MemoryStore` with idempotent upsert for structured tables.
+- `src/ev/memory/chunks.py` — deterministic document chunker.
+- `src/ev/memory/store.py` — `MemoryStore` with idempotent upsert for structured tables + document chunk upsert/search/delete.
 - `src/ev/memory/status.py` — `build_status_summary()` for status/brief.
 - `src/ev/llm/client.py` — async OpenAI-compatible LLM client (NVIDIA NIM default).
 - `src/ev/ingestion/` — GitHub, notes, Gmail, Calendar connectors.
 - `src/ev/security/boundary.py` — `Blocklist` and `assert_personal_only`.
-- `src/ev/tools/` — tools: status, brief, research, work, draft tools, deadline watcher, alerts, prep, calendar prep, people, obligations.
+- `src/ev/tools/` — tools: status, brief, research, work, draft tools, deadline watcher, alerts, prep, calendar prep, people, obligations, **memory, remember**.
 - `web/` — Vite + React + TypeScript + Three.js voice/HUD frontend.
 - `tests/` — pytest suite.
 - `scripts/`:
   - `setup_sqlite_vec.py` — create local SQLite DB, run migrations, create vector table.
   - `setup_postgres.py` — create Postgres DB and enable pgvector (optional).
   - `smoke_vector_search.py` — end-to-end vector search smoke test.
+  - `smoke_semantic_memory.py` — end-to-end memory store/search smoke test.
   - `check_embeddings.py` — verify local embedding model offline.
   - `smoke_web.py` — web client smoke test.
   - `progress_report.py` — MVP progress reporter.
@@ -70,6 +73,7 @@ Key directories and files:
 - `docs/development/migrations.md` — migration discipline policy.
 - `docs/superpowers/assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md` — honest maturity assessment and roadmap.
 - `docs/superpowers/plans/2026-09-17-phase-a-prep-sprint.md` — Phase A prep sprint plan.
+- `memory/hi-ev-phase-a-semantic-memory.md` — Phase A completion memory.
 - `pyproject.toml` — hatchling packaging, pytest config.
 
 ---
@@ -88,12 +92,12 @@ Known keys in `.env` (see the actual `.env` file; never commit real tokens):
 - `EV_GOOGLE_ENABLED=true/false` and `EV_GOOGLE_CREDENTIALS_PATH` — Gmail/Calendar OAuth.
 - `EV_ALERT_INTERVAL_SEC`, `EV_ALERT_WINDOW_HOURS`, `EV_QUIET_START`, `EV_QUIET_END`, `EV_KILL_SWITCH`.
 - `EV_ROBOCAD_PATH`, `EV_LEARNINGROBOTICS_PATH`, `EV_HIEV_PATH` — local repo paths.
+- `EV_GITHUB_REPOS` — comma-separated list of `owner/repo` for scheduled ingestion.
+- `EV_INGEST_INTERVAL_SEC` — seconds between background ingestion passes (default 300).
 
 OAuth files (also gitignored):
 - `C:/Users/point/projects/Hi-EV/secrets/credentials.json` — Google Desktop app client secret.
 - `C:/Users/point/projects/Hi-EV/secrets/token.json` — user access token from completed OAuth flow.
-
-Add `.env` values and OAuth files only; never paste them into code, chat, or memory files.
 
 ---
 
@@ -101,28 +105,33 @@ Add `.env` values and OAuth files only; never paste them into code, chat, or mem
 
 **Web/Voice/HUD MVP is complete and pushed.**
 **Phase A prep sprint is complete and pushed.**
+**Phase A — Ambient Ingestion + Semantic Memory is complete and pushed.**
 
-Latest commit: `3244a0f`.
+Latest commit: `40aaa2b`.
 Key prior commits:
 - `ac630a3` — Web/Voice/HUD MVP.
 - `7118e70` — Phase A prep sprint (Postgres path, test isolation, config blocklist, embeddings, migration discipline).
 - `f5db9e5` — SQLite + sqlite-vec default, `DocumentChunk` model, vector helpers, setup/smoke scripts.
 - `3244a0f` — Dossier and plan updates.
+- `c989e27` — Semantic memory engine, memory/remember tools, grounded-search scaffold.
+- `fa7a600` — Ground status, prep, and research tools in semantic memory.
+- `2358a97` — Daemon ingestion scheduler loop.
+- `40aaa2b` — Smoke test, env docs, memory update.
 
 Test result:
-- `python -m pytest` → **89 passed, 1 skipped**.
+- `python -m pytest` → **115 passed, 1 skipped**.
 - `ruff check src tests scripts` → clean.
 
 Database:
-- Default: SQLite + sqlite-vec at `~/.hiev/hiev.db` (or the path in `.env`).
+- Default: SQLite + sqlite-vec at `~/.hiev/hiev.db`.
 - Optional: Postgres 16 + pgvector via `EV_DATABASE_URL` and `scripts/setup_postgres.py`.
-- Migration base revision `aacdc9089a90` is frozen; new schema changes require new Alembic revisions.
+- Migration base revision `aacdc9089a90` is frozen.
 
 Daemon state:
 - EV daemon runs on `http://127.0.0.1:7345`.
-- Health endpoint: `GET /health` returns `{"status":"ok"}`.
+- Health: `GET /health` returns `{"status":"ok"}`.
 - WebSocket: `ws://127.0.0.1:7345/ws` for the browser HUD.
-- Routes available: `/status`, `/brief`, `/research`, `/work`, `/draft`, `/calendar-prep`, `/deadlines`, `/people`, `/obligations`, `/alerts`, `/prep`, `/health`, `/ws`.
+- Routes available: `/status`, `/brief`, `/research`, `/work`, `/draft`, `/calendar-prep`, `/deadlines`, `/people`, `/obligations`, `/alerts`, `/prep`, `/memory`, `/remember`, `/health`, `/ws`.
 
 ---
 
@@ -130,46 +139,50 @@ Daemon state:
 
 ### Web/Voice/HUD MVP (complete)
 
-- `web/` frontend: Vite + React + TypeScript + Three.js.
-- Simplified JARVIS reactor/HUD shell: Boot, Ignition, Scene, Core, Particles, Hud, Diagnostics, Suggestions.
-- Browser voice loop: `SpeechRecognition` STT, `speechSynthesis` TTS, push-to-talk via Space, click-to-talk, barge-in.
+- `web/` frontend with Three.js reactor/HUD shell.
+- Browser voice loop: `SpeechRecognition` STT, `speechSynthesis` TTS, push-to-talk via Space.
 - WebSocket bridge to `ws://127.0.0.1:7345/ws` with auto-reconnect.
-- Backend `/ws` endpoint and `ChatSession` intent classifier in `src/ev/server/chat.py`.
-- LLM-based intent classification routes to Hi-EV `ToolRegistry`; T2/T3 actions refused/confirmed in web UI.
-- CORS configured for `http://localhost:5173` and `http://127.0.0.1:5173`.
-- Tests: `tests/test_server.py` WebSocket ping, `tests/test_chat_handler.py` intent dispatch/tier refusal.
-- `cd web && npm run build` succeeds.
+- Backend `/ws` endpoint and `ChatSession` intent classifier.
+- CORS for `http://localhost:5173` and `http://127.0.0.1:5173`.
 
 ### Phase A prep sprint (complete)
 
-- **SQLite + sqlite-vec default:** no system Postgres install required to run locally.
-- **Lazy async engine:** `src/ev/db/base.py` loads sqlite-vec extension via custom `aiosqlite` creator.
-- **`DocumentChunk` model** and Alembic migration `e65cfe42f3a6_add_document_chunks.py`.
-- **Vector helpers** in `src/ev/db/vector.py`: create table, index, search, delete.
-- **Setup + smoke scripts:** `scripts/setup_sqlite_vec.py`, `scripts/smoke_vector_search.py`, `scripts/check_embeddings.py`.
-- **Config-driven blocklist:** `EV_BLOCKED_HANDLES` / `EV_BLOCKED_DOMAINS` replace hardcoded strings.
-- **Local embeddings:** `sentence-transformers` `all-MiniLM-L6-v2`, 384 dimensions.
-- **Test DB isolation:** `tests/conftest.py` forces in-memory SQLite and disposes engine at session finish.
-- **Migration discipline:** documented in `docs/development/migrations.md`; base revision frozen.
+- SQLite + sqlite-vec default database.
+- Lazy async engine with sqlite-vec extension loaded.
+- `DocumentChunk` model + Alembic migration.
+- `src/ev/db/vector.py` helpers for vector table CRUD and search.
+- `scripts/setup_sqlite_vec.py` and `scripts/smoke_vector_search.py`.
+- Config-driven blocklist via `.env`.
+- Local embedding model (`all-MiniLM-L6-v2`, 384-dim).
+- Test DB isolation via in-memory SQLite.
+- Migration discipline documented.
+
+### Phase A — Ambient Ingestion + Semantic Memory (complete)
+
+- Document chunking pipeline in `src/ev/memory/chunks.py`.
+- Idempotent document chunk upsert/search/delete in `src/ev/memory/store.py`.
+- sqlite-vec hybrid search (vector KNN + keyword overlap + recency/source-type rerank).
+- `MemoryTool` + `RememberTool` in `src/ev/tools/memory_tool.py`.
+- `ev remember "..."` CLI command and `POST /remember` endpoint.
+- WebSocket intents: `memory`, `search_memory`, `find_memory`, `recall`, `remember`, `save_memory`.
+- Grounded `StatusTool`, `PrepTool`, `ResearchTool` inject document-memory snippets.
+- Background ingestion scheduler in `src/ev/server/scheduler.py`, wired into FastAPI lifespan.
+- Tests: chunking, memory tool, grounded tools, scheduler.
+- Smoke test: `scripts/smoke_semantic_memory.py`.
 
 ### Phase 2 + 3 features (complete)
 
-- NVIDIA NIM LLM client with `meta/llama-3.2-11b-vision-instruct` default.
-- `ev status`, `ev brief`, `ev research` with citations, `ev work on`, `ev draft` tools.
+- NVIDIA NIM LLM client.
+- `ev status`, `ev brief`, `ev research`, `ev work on`, `ev draft` tools.
 - Read-only Gmail/Calendar ingestion via OAuth.
 - Structured memory tables: `Project`, `Ingest`, `Deadline`, `Person`, `Obligation`, `Decision`, `Event`.
-- Deadline watcher, proactive alert loop (stdout only), `ev alerts`, `ev prep`, people/obligations lookup.
-- Idempotent upserts by `(source, source_id)`.
+- Deadline watcher, alert loop, `ev prep`, people/obligations lookup.
 
 ---
 
 ## 6. What is blocked / waiting
 
-**Nothing is currently blocked.** Phase A (Ambient Ingestion + Semantic Memory) is ready to start.
-
-Next optional user actions:
-- Start Phase A: document chunking, continuous ingestion scheduler, hybrid search, `ev remember`.
-- Install Postgres 16 + pgvector later if you prefer that backend; the migration path is preserved.
+**Nothing is currently blocked.** Phase B (Reasoning Router + Eval Harness) is ready to start.
 
 ---
 
@@ -178,7 +191,7 @@ Next optional user actions:
 | Tier | Policy | Examples |
 |------|--------|----------|
 | T0 | Always auto | memory/web/repo search, `ev status`, `ev brief`, `ev research`, `ev deadlines`, `ev people`, `ev obligations`, `ev alerts` |
-| T1 | Auto, log, undoable | draft PR/commit/email, run tests, spawn Claude Code, `ev work on`, `ev calendar-prep`, `ev prep`, read-only Gmail/Calendar sync |
+| T1 | Auto, log, undoable | draft PR/commit/email, run tests, spawn Claude Code, `ev work on`, `ev calendar-prep`, `ev prep`, read-only Gmail/Calendar sync, `ev remember` |
 | T2 | Confirm exact payload | send email, push non-main branch, merge PR, post publicly (not yet implemented) |
 | T3 | Hard-blocked | push to main, publish anything, spend money, touch work accounts or patent/IP (not yet fully enforced) |
 
@@ -187,8 +200,6 @@ Tier enforcement is currently metadata-level; real T2 confirmation UI and T3 har
 ---
 
 ## 8. Default commands to verify health
-
-When starting a new session, run these in order:
 
 ```bash
 cd C:/Users/point/projects/Hi-EV
@@ -199,45 +210,42 @@ python scripts/setup_sqlite_vec.py
 python -m evd
 ```
 
-Then in another shell:
-```bash
-curl -s http://127.0.0.1:7345/health | python -m json.tool
-ev status Hi-EV
-ev brief
-ev research "current state of local LLM voice assistants 2026"
-ev draft reply --to "test@example.com" --subject "Hello" --snippet "Want to meet?"
-```
-
-To run the web HUD:
+Web HUD:
 ```bash
 cd web
 npm install
 npm run dev
-# open http://localhost:5173, click INITIALISE, press Space, speak
+# open http://localhost:5173
 ```
 
 ---
 
-## 9. Phase A plan summary
+## 9. Phase A plan summary (complete)
 
-Phase A is the next major milestone.
+Phase A — Ambient Ingestion + Semantic Memory — is complete and pushed.
+
+Main goals delivered:
+1. Continuous ingestion scheduler.
+2. Document chunking pipeline.
+3. Semantic memory search with sqlite-vec.
+4. `ev remember "..."` command.
+5. Update `status`, `brief`, `research`, `prep` to retrieve document chunks.
+6. Tests and smoke scripts for the memory layer.
+
+## 10. Phase B plan summary (next)
+
+Phase B — Reasoning Router + Eval Harness — is the next major milestone.
 
 Main goals:
-1. **Continuous ingestion scheduler** — daemon runs GitHub, notes, Gmail, Calendar ingestion on intervals.
-2. **Document chunking pipeline** — chunk markdown, notes, emails, web pages.
-3. **Semantic memory search** — store chunks + embeddings in sqlite-vec, hybrid keyword + vector retrieval.
-4. **`ev remember "..."` command** — capture explicit facts into structured memory.
-5. **Update tools to use document memory** — `status`, `brief`, `research`, `prep` retrieve relevant chunks.
-6. **First eval questions** for status/research accuracy.
-
-Next session should start by:
-1. Confirming tests pass and `python scripts/setup_sqlite_vec.py` works.
-2. Designing the chunking strategy (size, overlap, provenance).
-3. Implementing `MemoryStore` methods to upsert `DocumentChunk` rows and index embeddings.
+1. Reasoning router (fast / agent / deliberate paths).
+2. Streaming completions in `LLMClient` and WebSocket `/ws`.
+3. Eval harness with 100+ golden questions.
+4. Guard model / prompt-injection classifier.
+5. Begin designing T2/T3 confirmation flows.
 
 ---
 
-## 10. Non-obvious context for a new session
+## 11. Non-obvious context for a new session
 
 - The default LLM **must** be `meta/llama-3.2-11b-vision-instruct`. Do not switch back to `meta/llama-3.3-70b-instruct`; it is EOL and returns 410 Gone.
 - Use `scripts/test_nvidia_models.py` to probe which models work if the default ever breaks.
@@ -245,6 +253,7 @@ Next session should start by:
 - If tests hang on exit, ensure `pytest` disposes the async engine; `tests/conftest.py` handles this.
 - `ev status` takes a positional argument (`ev status Hi-EV`), not `--project`.
 - `ev draft commit` and `ev draft pr` require `--project`.
+- `ev remember` stores text as a `DocumentChunk`; use `--project` to tag it.
 - Daemon port is `7345`. If it fails to bind, kill the existing `python` process on that port.
 - The project is local-first; the NVIDIA API is the primary cloud dependency. DuckDuckGo search and Google APIs (read-only) are also used.
 - Always preserve the personal-only boundary. If a connector or tool might touch work data, gate it behind `EV_PERSONAL_ONLY=true` (default) and the blocklist.
@@ -254,8 +263,9 @@ Next session should start by:
 
 ---
 
-## 11. Related memories
+## 12. Related memories
 
 - [[web-voice-hud-mvp]] — browser-native voice/HUD face.
 - [[hi-ev-phase-a-prep-sprint]] — Phase A prep sprint completion.
+- [[hi-ev-phase-a-semantic-memory]] — Phase A — Ambient Ingestion + Semantic Memory completion.
 - [[hi-ev-roadmap-2026-09-17]] — honest state assessment and phased roadmap.
