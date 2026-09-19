@@ -89,6 +89,60 @@ async def test_run_ingestion_pass_github_repos(mock_notes_cls, mock_github_cls, 
     assert any("ranking" in r["text"].lower() for r in results)
 
 
+@patch("ev.server.scheduler.NotesIngestion")
+async def test_ingestion_marks_source_trust(mock_notes_cls, store):
+    settings = Settings(ingest_interval_sec=1, kill_switch=False, github_repos=[], google_enabled=False)
+    notes_source = MagicMock()
+    notes_source.ingest = AsyncMock(return_value=[
+        {
+            "source": "notes",
+            "source_id": "trusted_note.md",
+            "content_hash": "h1",
+            "content": "Personal note about RoboCAD.",
+            "project_tag": "robocad",
+            "privacy_level": "personal",
+        }
+    ])
+    mock_notes_cls.return_value = notes_source
+
+    await _run_ingestion_pass(settings)
+
+    results = await store.search_document_chunks("RoboCAD", k=3)
+    assert any(r["source"] == "notes" and r["trusted"] is True for r in results)
+
+
+@patch("ev.server.scheduler.NotesIngestion")
+@patch("ev.server.scheduler.GitHubIngestion")
+async def test_ingestion_marks_untrusted_external_source(mock_github_cls, mock_notes_cls, store):
+    settings = Settings(
+        ingest_interval_sec=1,
+        kill_switch=False,
+        github_repos=["satyamdas03/Hi-EV"],
+        google_enabled=False,
+    )
+    notes_source = MagicMock()
+    notes_source.ingest = AsyncMock(return_value=[])
+    mock_notes_cls.return_value = notes_source
+
+    github_source = MagicMock()
+    github_source.ingest = AsyncMock(return_value=[
+        {
+            "source": "github_issues",
+            "source_id": "Hi-EV:1",
+            "content_hash": "h2",
+            "content": "External issue about RoboCAD.",
+            "project_tag": "hi-ev",
+            "privacy_level": "personal",
+        }
+    ])
+    mock_github_cls.return_value = github_source
+
+    await _run_ingestion_pass(settings)
+
+    results = await store.search_document_chunks("RoboCAD", k=3)
+    assert any(r["source"] == "github_issues" and r["trusted"] is False for r in results)
+
+
 @patch("ev.server.scheduler._run_ingestion_pass")
 async def test_ingest_loop_skips_kill_switch(mock_run, store):
     settings = Settings(ingest_interval_sec=0, kill_switch=True)

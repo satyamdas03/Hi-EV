@@ -178,6 +178,10 @@ def chunk_ingest_records(
         "user_memory",
     }
 
+    # Sources that are user-authored or explicitly captured are trusted by default.
+    # External fetched sources are untrusted unless the ingestion source says otherwise.
+    trusted_by_default = {"notes", "transcript", "user_memory"}
+
     for record in records:
         source = record.get("source", "")
         if source not in long_form_sources:
@@ -186,7 +190,7 @@ def chunk_ingest_records(
         if not content.strip():
             continue
         project_tag = record.get("project_tag") or record.get("project_name")
-        trusted = record.get("trusted", True)
+        trusted = record.get("trusted", source in trusted_by_default)
         for chunk in chunker.split(
             content,
             source=source,

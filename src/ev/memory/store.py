@@ -550,6 +550,7 @@ class MemoryStore:
                 "chunk_index": row.chunk_index,
                 "text": row.text,
                 "project_name": row.project_name,
+                "trusted": row.trusted,
                 "updated_at": row.updated_at.isoformat() if row.updated_at else None,
                 "score": round(score, 4),
             }

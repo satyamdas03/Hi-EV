@@ -44,7 +44,7 @@ class DocumentChunk(Base):
     project_name = Column(String(128), nullable=True, index=True)
     chunk_index = Column(Integer, nullable=False, default=0)
     text = Column(Text, nullable=False)
-    trusted = Column(Boolean, default=True)
+    trusted = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=now_utc)
     updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
@@ -64,7 +64,7 @@ class Ingest(Base):
     content = Column(Text, nullable=True)
     project_tag = Column(String(128), nullable=True, index=True)
     privacy_level = Column(String(32), default="personal")
-    trusted = Column(Boolean, default=True)
+    trusted = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=now_utc)
     updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
