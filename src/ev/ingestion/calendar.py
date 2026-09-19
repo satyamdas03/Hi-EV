@@ -66,6 +66,7 @@ class CalendarIngestion(IngestionSource):
                     "content": content,
                     "project_tag": project_tag,
                     "privacy_level": "sensitive",
+                    "trusted": False,
                 }
             )
             due = _parse_datetime(event.get("start", {}))

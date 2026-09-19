@@ -58,3 +58,76 @@ async def test_llm_client_nvidia_request_body_and_response(mock_async_client):
     assert body["temperature"] == 0.5
     assert body["max_tokens"] == 512
     assert kwargs["headers"]["Authorization"] == "Bearer nvapi-test"
+
+
+def _mock_stream_response(sse_lines):
+    async def _lines():
+        for line in sse_lines:
+            yield line
+
+    response = MagicMock()
+    response.raise_for_status = MagicMock()
+    response.aiter_lines = _lines
+    response.__aenter__ = AsyncMock(return_value=response)
+    response.__aexit__ = AsyncMock(return_value=None)
+
+    mock_client = MagicMock()
+    mock_client.stream = MagicMock(return_value=response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    return mock_client
+
+
+@patch("ev.llm.client.httpx.AsyncClient")
+async def test_llm_client_stream_openai_format(mock_async_client):
+    _clear_settings_cache()
+
+    sse_lines = [
+        "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n",
+        "data: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n",
+        "data: [DONE]\n",
+    ]
+
+    mock_client = _mock_stream_response(sse_lines)
+    mock_async_client.return_value = mock_client
+
+    client = LLMClient(
+        Settings(
+            nvidia_api_key="nvapi-test",
+            nvidia_base_url="https://integrate.api.nvidia.com/v1",
+            llm_provider="nvidia",
+            llm_model="meta/llama-3.2-11b-vision-instruct",
+        )
+    )
+    chunks = [chunk async for chunk in client.complete_stream(messages=[{"role": "user", "content": "hi"}])]
+
+    assert chunks == ["Hello", " world"]
+    mock_client.stream.assert_called_once()
+    args, kwargs = mock_client.stream.call_args
+    assert args[0] == "POST"
+    assert kwargs["json"]["stream"] is True
+
+
+@patch("ev.llm.client.httpx.AsyncClient")
+async def test_llm_client_stream_anthropic_format(mock_async_client):
+    _clear_settings_cache()
+
+    sse_lines = [
+        'data: {"type":"content_block_delta","delta":{"text":"Hi"}}\n',
+        'data: {"type":"content_block_delta","delta":{"text":" there"}}\n',
+        "data: [DONE]\n",
+    ]
+
+    mock_client = _mock_stream_response(sse_lines)
+    mock_async_client.return_value = mock_client
+
+    client = LLMClient(
+        Settings(
+            anthropic_api_key="sk-ant-test",
+            llm_provider="anthropic",
+            llm_model="claude-3-5-sonnet-20241022",
+        )
+    )
+    chunks = [chunk async for chunk in client.complete_stream(messages=[{"role": "user", "content": "hi"}])]
+
+    assert chunks == ["Hi", " there"]

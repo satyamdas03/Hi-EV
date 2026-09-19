@@ -10,9 +10,12 @@ import json
 import logging
 from typing import Any
 
+from ev.config import get_settings
 from ev.db.base import SessionLocal
 from ev.llm.client import LLMClient
 from ev.memory.store import MemoryStore
+from ev.reasoning.router import RequestContext, route_request
+from ev.security.guard import Guard, GuardStatus
 from ev.tools.alerts_tool import AlertsTool
 from ev.tools.brief_tool import BriefTool
 from ev.tools.calendar_prep_tool import CalendarPrepTool
@@ -54,6 +57,8 @@ class ChatSession:
     def __init__(self, websocket):
         self.websocket = websocket
         self.client = LLMClient()
+        self.guard = Guard()
+        self.settings = get_settings()
         self.history: list[dict[str, str]] = []
         self.system_prompt = (
             "You are EV, a local-first personal AI operating system. You are helpful, concise, "
@@ -75,11 +80,31 @@ class ChatSession:
             await self._send_error("Empty transcript")
             return
 
+        # Guard runs before any intent classification or tool dispatch.
+        guard_decision = self.guard.check(text, source="user", trusted=True)
+        if guard_decision.status == GuardStatus.BLOCKED:
+            await self._send_json({"type": "phase", "phase": "error"})
+            await self._send_json({"type": "delta", "text": guard_decision.reason})
+            await self._send_json({"type": "done"})
+            return
+
         self.history.append({"role": "user", "content": text})
         await self._send_json({"type": "phase", "phase": "thinking"})
 
+        route = None
+        if self.settings.enable_reasoning_router:
+            route = route_request(
+                text,
+                RequestContext(
+                    available_tools=list(_INTENT_ALIASES.keys())
+                    + ["status", "brief", "memory", "remember", "research", "prep", "work", "draft", "chat"],
+                    history_turns=len(self.history) // 2,
+                ),
+            )
+            await self._send_json({"type": "phase", "phase": f"route:{route.path.value}"})
+
         try:
-            response = await self._resolve(text)
+            response = await self._resolve(text, guard_decision=guard_decision, route=route)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Chat resolution failed: %s", exc)
             response = f"EV had a problem handling that: {exc}"
@@ -92,14 +117,14 @@ class ChatSession:
         await self._send_json({"type": "delta", "text": response})
         await self._send_json({"type": "done"})
 
-    async def _resolve(self, text: str) -> str:
+    async def _resolve(self, text: str, guard_decision, route=None) -> str:
         raw_intent, args = await self._classify_intent(text)
         intent = _INTENT_ALIASES.get(raw_intent, raw_intent)
 
         if intent == "chat":
-            return await self._answer_chat(text)
+            return await self._answer_chat(text, route=route)
 
-        return await self._run_tool(intent, args)
+        return await self._run_tool(intent, args, guard_decision=guard_decision)
 
     async def _classify_intent(self, text: str) -> tuple[str, dict[str, Any]]:
         """Use the LLM to map a user utterance to a tool + arguments.
@@ -154,22 +179,26 @@ class ChatSession:
             logger.warning("Could not parse intent JSON: %s", raw)
             return "chat", {}
 
-    async def _answer_chat(self, text: str) -> str:
+    async def _answer_chat(self, text: str, route=None) -> str:
         messages = [
             {"role": "system", "content": self.system_prompt},
             *self.history,
         ]
         return await self.client.complete(messages, temperature=0.7, max_tokens=1024)
 
-    async def _run_tool(self, intent: str, args: dict[str, Any]) -> str:
+    async def _run_tool(self, intent: str, args: dict[str, Any], guard_decision) -> str:
+        from ev.tools.registry import ToolTierError
+
         async with SessionLocal() as session:
             store = MemoryStore(session)
             registry = ToolRegistry(store)
             self._register_tools(registry)
             try:
-                tool = registry.get(intent)
+                tool = registry.get(intent, guard_decision=guard_decision)
             except KeyError:
                 return f"EV doesn't have a '{intent}' tool yet."
+            except ToolTierError as exc:
+                return str(exc)
 
             # Refuse T2/T3 actions outright in the MVP web UI.
             if tool.tier in TIER_CONFIRMATION:

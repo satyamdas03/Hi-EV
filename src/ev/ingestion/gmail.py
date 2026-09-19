@@ -136,6 +136,7 @@ class GmailIngestion(IngestionSource):
                     "content": content,
                     "project_tag": self._guess_project_tag(content),
                     "privacy_level": "sensitive",
+                    "trusted": False,
                 }
             )
         return records, people

@@ -44,14 +44,14 @@ class Settings(BaseSettings):
     hiev_path: Path | None = None
 
     # Personal-only boundary: comma-separated handles/domains to never ingest or act on.
-    blocked_handles: list[str] = Field(default_factory=list)
-    blocked_domains: list[str] = Field(default_factory=list)
+    blocked_handles: str | list[str] = Field(default_factory=list)
+    blocked_domains: str | list[str] = Field(default_factory=list)
 
     # Local embedding model for semantic memory.
     embedding_model: str = Field(default="all-MiniLM-L6-v2")
 
     # GitHub repos to monitor for personal ingestion (comma-separated owner/name pairs).
-    github_repos: list[str] = Field(default_factory=list)
+    github_repos: str | list[str] = Field(default_factory=list)
 
     # Alert loop / quiet hours
     alert_interval_sec: int = 900
@@ -63,7 +63,17 @@ class Settings(BaseSettings):
     # Background ingestion loop interval in seconds (default 5 minutes).
     ingest_interval_sec: int = 300
 
-    @field_validator("blocked_handles", "blocked_domains", mode="before")
+    # Phase B — Reasoning Router + Eval Harness feature flags.
+    enable_reasoning_router: bool = Field(default=False)
+    llm_stream_enabled: bool = Field(default=True)
+
+    # Guard model / prompt-injection classifier settings.
+    guard_llm_enabled: bool = Field(default=True)
+    guard_caution_threshold: float = Field(default=0.6)
+    guard_block_patterns: str | list[str] = Field(default_factory=list)
+    guard_untrusted_downgrade_tier: int = Field(default=1)
+
+    @field_validator("blocked_handles", "blocked_domains", "github_repos", "guard_block_patterns", mode="before")
     @classmethod
     def _parse_csv(cls, value):
         if isinstance(value, str):

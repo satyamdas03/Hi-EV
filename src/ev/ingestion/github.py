@@ -86,4 +86,5 @@ class GitHubIngestion(IngestionSource):
             "content": content,
             "project_tag": repo.split("/")[-1].lower(),
             "privacy_level": "personal",
+            "trusted": False,
         }

@@ -402,6 +402,7 @@ class MemoryStore:
                 continue
             key = (source, source_id, chunk_index)
             row = existing.get(key)
+            trusted = chunk.get("trusted", True)
             if row is None:
                 new_rows.append(
                     DocumentChunk(
@@ -410,12 +411,14 @@ class MemoryStore:
                         chunk_index=chunk_index,
                         text=text,
                         project_name=chunk.get("project_name"),
+                        trusted=trusted,
                     )
                 )
                 all_touched_ids.append(None)
             elif row.text != text:
                 row.text = text
                 row.project_name = chunk.get("project_name", row.project_name)
+                row.trusted = trusted
                 row.updated_at = now
                 changed_rows.append(row)
                 self.session.add(row)
@@ -589,7 +592,11 @@ class MemoryStore:
         # Slight boost for user-authored memory and personal notes.
         source_bonus = 0.05 if row.source in {"user_memory", "notes"} else 0.0
 
-        return vector_score + keyword_score + recency_score + source_bonus
+        # Down-weight untrusted external sources so the guard's caution signal
+        # is reflected in retrieval ranking.
+        trust_penalty = 0.0 if row.trusted else 0.1
+
+        return vector_score + keyword_score + recency_score + source_bonus - trust_penalty
 
     async def delete_document_chunks(self, source: str, source_id: str | None = None) -> int:
         """Delete DocumentChunk rows (and their vectors) by source or source+source_id."""

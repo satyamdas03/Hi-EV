@@ -39,6 +39,7 @@ class NotesIngestion(IngestionSource):
                     "content": content,
                     "project_tag": self._guess_project_tag(content, rel),
                     "privacy_level": "personal",
+                    "trusted": True,
                 }
             )
         return records

@@ -20,6 +20,7 @@ class TextChunk:
     chunk_index: int
     text: str
     project_name: str | None = None
+    trusted: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -28,6 +29,7 @@ class TextChunk:
             "chunk_index": self.chunk_index,
             "text": self.text,
             "project_name": self.project_name,
+            "trusted": self.trusted,
         }
 
 
@@ -48,6 +50,7 @@ class Chunker:
         source: str,
         source_id: str,
         project_name: str | None = None,
+        trusted: bool = True,
     ) -> list[TextChunk]:
         """Split *text* into chunks and assign (source, source_id, chunk_index)."""
         if not text or not text.strip():
@@ -96,6 +99,7 @@ class Chunker:
                 chunk_index=idx,
                 text=chunk.strip(),
                 project_name=project_name,
+                trusted=trusted,
             )
             for idx, chunk in enumerate(chunks)
             if chunk.strip()
@@ -182,11 +186,13 @@ def chunk_ingest_records(
         if not content.strip():
             continue
         project_tag = record.get("project_tag") or record.get("project_name")
+        trusted = record.get("trusted", True)
         for chunk in chunker.split(
             content,
             source=source,
             source_id=record.get("source_id", ""),
             project_name=project_tag,
+            trusted=trusted,
         ):
             chunks.append(chunk.to_dict())
 
