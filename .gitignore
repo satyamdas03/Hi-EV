@@ -159,6 +159,9 @@ models/
 cache/
 embeddings/
 
+# Eval reports
+eval_report.json
+
 # Frontend build artifacts
 web/node_modules/
 web/dist/
