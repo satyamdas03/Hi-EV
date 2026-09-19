@@ -14,6 +14,7 @@ const spinFor: Record<Phase, number> = {
   listening: 1.1,
   thinking: 2.6,
   speaking: 1.3,
+  streaming: 2.2,
   tooling: 3.0,
   error: 0.4,
 }
@@ -45,6 +46,7 @@ function Rig() {
       listening: '#00e5ff',
       thinking: '#ff9f43',
       speaking: '#19c4c4',
+      streaming: '#c9fdff',
       tooling: '#ff9f43',
       error: '#ff4d4d',
     }

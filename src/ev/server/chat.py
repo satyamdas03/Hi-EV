@@ -6,6 +6,7 @@ response back as WebSocket deltas.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -60,6 +61,7 @@ class ChatSession:
         self.guard = Guard()
         self.settings = get_settings()
         self.history: list[dict[str, str]] = []
+        self._stop_event = asyncio.Event()
         self.system_prompt = (
             "You are EV, a local-first personal AI operating system. You are helpful, concise, "
             "and you only act on the user's personal projects and data. You refuse requests "
@@ -70,15 +72,24 @@ class ChatSession:
         msg_type = data.get("type")
         if msg_type == "transcript":
             await self._on_transcript(data.get("text", ""))
+        elif msg_type == "stop":
+            await self._on_stop()
         elif msg_type == "ping":
             await self._send_json({"type": "pong"})
         else:
             await self._send_error(f"Unknown message type: {msg_type}")
 
+    async def _on_stop(self) -> None:
+        self._stop_event.set()
+        await self._send_json({"type": "phase", "phase": "dormant"})
+
     async def _on_transcript(self, text: str) -> None:
         if not text or not text.strip():
             await self._send_error("Empty transcript")
             return
+
+        # Reset any previous stop request before starting a new turn.
+        self._stop_event.clear()
 
         # Guard runs before any intent classification or tool dispatch.
         guard_decision = self.guard.check(text, source="user", trusted=True)
@@ -144,6 +155,8 @@ class ChatSession:
         pieces: list[str] = []
         try:
             async for delta in self.client.complete_stream(messages, temperature=0.7, max_tokens=1024):
+                if self._stop_event.is_set():
+                    break
                 if delta:
                     await self._send_json({"type": "delta", "text": delta})
                     pieces.append(delta)
@@ -154,10 +167,11 @@ class ChatSession:
             pieces.append(err)
 
         response = "".join(pieces)
-        self.history.append({"role": "assistant", "content": response})
-        # Keep history bounded.
-        if len(self.history) > 20:
-            self.history = self.history[-20:]
+        if response:
+            self.history.append({"role": "assistant", "content": response})
+            # Keep history bounded.
+            if len(self.history) > 20:
+                self.history = self.history[-20:]
 
         await self._send_json({"type": "done"})
 

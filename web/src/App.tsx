@@ -92,7 +92,7 @@ export function App() {
       <Scene />
       <Ignition onStart={powerOn} />
       <Boot />
-      <Hud />
+      <Hud bridge={bridge} />
       <Suggestions />
       <Diagnostics />
     </>

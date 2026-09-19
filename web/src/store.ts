@@ -7,6 +7,7 @@ export type Phase =
   | 'listening'
   | 'thinking'
   | 'speaking'
+  | 'streaming'
   | 'tooling'
   | 'error'
 
@@ -25,6 +26,8 @@ export interface EvState {
   error: string | null
   bootNote: string | null
   activeTool: string | null
+  isStreaming: boolean
+  streamPhase: string | null
 
   setPhase: (phase: Phase) => void
   addUserTurn: (text: string) => void
@@ -35,6 +38,8 @@ export interface EvState {
   setError: (error: string | null) => void
   setBootNote: (note: string | null) => void
   setActiveTool: (tool: string | null) => void
+  startStream: (phase: string) => void
+  stopStream: () => void
   clearError: () => void
 }
 
@@ -49,8 +54,14 @@ export const useStore = create<EvState>((set) => ({
   error: null,
   bootNote: null,
   activeTool: null,
+  isStreaming: false,
+  streamPhase: null,
 
   setPhase: (phase) => set({ phase }),
+
+  startStream: (streamPhase) => set({ isStreaming: true, streamPhase }),
+
+  stopStream: () => set({ isStreaming: false, streamPhase: null }),
 
   addUserTurn: (text) =>
     set((s) => ({

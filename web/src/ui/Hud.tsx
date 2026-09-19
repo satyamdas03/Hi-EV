@@ -1,4 +1,6 @@
 import { useStore, type Phase } from '../store'
+import { Chat } from './Chat'
+import type { EvBridge } from '../lib/bridge'
 
 const statusText: Record<Phase, string> = {
   offline: 'OFFLINE',
@@ -7,13 +9,13 @@ const statusText: Record<Phase, string> = {
   listening: 'LISTENING',
   thinking: 'PROCESSING',
   speaking: 'RESPONDING',
+  streaming: 'STREAMING',
   tooling: 'ACCESSING SYSTEMS',
   error: 'ERROR',
 }
 
-export function Hud() {
+export function Hud({ bridge }: { bridge: EvBridge }) {
   const phase = useStore((s) => s.phase)
-  const turns = useStore((s) => s.turns)
   const caption = useStore((s) => s.caption)
   const level = useStore((s) => s.level)
   const connected = useStore((s) => s.connected)
@@ -47,14 +49,7 @@ export function Hud() {
         </div>
       )}
 
-      <div className="log">
-        {turns.slice(-6).map((t) => (
-          <div key={t.id} className={`log-line log-${t.role}`}>
-            <span className="log-who">{t.role === 'user' ? 'YOU' : 'EV'}</span>
-            <span className="log-text">{t.text}</span>
-          </div>
-        ))}
-      </div>
+      <Chat bridge={bridge} />
 
       {caption && (
         <div className="caption">{caption}</div>

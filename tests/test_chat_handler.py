@@ -1,5 +1,6 @@
 """Tests for the WebSocket chat session / intent dispatcher."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -233,3 +234,35 @@ async def test_chat_non_streaming_when_stream_disabled(mock_llm_client, mock_ws)
     assert {"type": "phase", "phase": "streaming"} not in calls
     delta = next(c for c in calls if c.get("type") == "delta")
     assert "Hello, I am EV." in delta["text"]
+
+
+@patch("ev.server.chat.LLMClient")
+async def test_chat_stop_cancels_stream(mock_llm_client, mock_ws):
+    """A 'stop' message interrupts an in-progress streaming response."""
+    from ev.config import Settings
+    from ev.server.chat import ChatSession
+
+    async def _slow_stream(*args, **kwargs):
+        for word in ["One", " Two", " Three", " Four"]:
+            yield word
+            await asyncio.sleep(0.05)
+
+    llm = MagicMock()
+    llm.complete = AsyncMock(return_value='{"tool": "chat", "args": {}}')
+    llm.complete_stream = _slow_stream
+    mock_llm_client.return_value = llm
+
+    session = ChatSession(mock_ws)
+    session.settings = Settings(enable_reasoning_router=True, llm_stream_enabled=True)
+
+    task = asyncio.create_task(session.handle_message({"type": "transcript", "text": "hello"}))
+    await asyncio.sleep(0.01)
+    await session.handle_message({"type": "stop"})
+    await task
+
+    calls = [c.args[0] for c in mock_ws.send_json.await_args_list]
+    assert {"type": "phase", "phase": "streaming"} in calls
+    assert {"type": "phase", "phase": "dormant"} in calls
+    assert calls[-1] == {"type": "done"}
+    deltas = [c["text"] for c in calls if c.get("type") == "delta"]
+    assert len(deltas) < 4
