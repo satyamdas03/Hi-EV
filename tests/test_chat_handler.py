@@ -77,25 +77,76 @@ async def test_chat_routes_to_status_tool(mock_llm_client, mock_ws, seeded_db):
 
 @patch("ev.server.chat.LLMClient")
 async def test_chat_runs_tier_one_action(mock_llm_client, mock_ws):
+    """Tier-1 tools like remember auto-execute without confirmation."""
     from ev.server.chat import ChatSession
 
     llm = MagicMock()
-    llm.complete = AsyncMock(return_value='{"tool": "work", "args": {"project": "RoboCAD", "task": "fix test"}}')
+    llm.complete = AsyncMock(return_value='{"tool": "remember", "args": {"text": "RoboCAD is in Phase 29"}}')
     mock_llm_client.return_value = llm
 
     session = ChatSession(mock_ws)
-    await session.handle_message({"type": "transcript", "text": "work on RoboCAD fix test"})
+    await session.handle_message({"type": "transcript", "text": "remember RoboCAD is in Phase 29"})
 
     calls = [c.args[0] for c in mock_ws.send_json.await_args_list]
     delta = next(c for c in calls if c.get("type") == "delta")
-    # Tier-1 work_on auto-executes in the MVP web UI. In tests it fails because the
-    # project is not seeded, so we expect an execution error rather than a confirmation prompt.
-    assert "EV couldn't run" in delta["text"] or "Claude Code" in delta["text"] or "Project not found" in delta["text"]
+    assert "EV remembered" in delta["text"]
     assert calls[-1] == {"type": "done"}
 
 
-async def test_chat_refuses_high_tier_tool(mock_ws, safe_guard):
-    """Tier 2/3 tools are refused in the web UI regardless of intent."""
+async def test_chat_requests_tier_two_confirmation(mock_ws, safe_guard):
+    """Tier-2 tools trigger a confirm message instead of running immediately."""
+    from ev.server.chat import ChatSession, ConfirmationRequired
+    from ev.tools.registry import Tool
+
+    class FakeT2Tool(Tool):
+        def __init__(self):
+            super().__init__("fake_t2", 2, "Test tier-2 tool")
+
+        async def run(self, **kwargs):
+            return "should not run yet"
+
+    session = ChatSession(mock_ws)
+    session._register_tools = lambda r: r.register(FakeT2Tool())
+
+    response = await session._run_tool("fake_t2", {"arg": "value"}, safe_guard)
+    assert isinstance(response, ConfirmationRequired)
+    confirm_call = next(
+        c.args[0] for c in mock_ws.send_json.await_args_list if c.args[0].get("type") == "confirm"
+    )
+    assert confirm_call["tool"] == "fake_t2"
+    assert confirm_call["tier"] == 2
+    assert "arg='value'" in confirm_call["prompt"]
+
+
+async def test_chat_confirms_tier_two_action(mock_ws, safe_guard):
+    """A confirm_response with confirmed=True runs the pending T2 tool."""
+    from ev.server.chat import ChatSession
+    from ev.tools.registry import Tool
+
+    class FakeT2Tool(Tool):
+        def __init__(self):
+            super().__init__("fake_t2", 2, "Test tier-2 tool")
+
+        async def run(self, **kwargs):
+            return "ran after confirm"
+
+    session = ChatSession(mock_ws)
+    session._register_tools = lambda r: r.register(FakeT2Tool())
+
+    # First request the action.
+    await session._run_tool("fake_t2", {}, safe_guard)
+    # Then confirm it.
+    await session.handle_message({"type": "confirm_response", "confirmed": True})
+
+    calls = [c.args[0] for c in mock_ws.send_json.await_args_list]
+    assert any(c.get("type") == "phase" and c.get("phase") == "acting" for c in calls)
+    delta = next(c for c in calls if c.get("type") == "delta")
+    assert "ran after confirm" in delta["text"]
+    assert calls[-1] == {"type": "done"}
+
+
+async def test_chat_denies_tier_two_action(mock_ws, safe_guard):
+    """A confirm_response with confirmed=False cancels the pending T2 tool."""
     from ev.server.chat import ChatSession
     from ev.tools.registry import Tool
 
@@ -109,9 +160,33 @@ async def test_chat_refuses_high_tier_tool(mock_ws, safe_guard):
     session = ChatSession(mock_ws)
     session._register_tools = lambda r: r.register(FakeT2Tool())
 
-    # Bypass classification and run the tool directly.
-    response = await session._run_tool("fake_t2", {}, safe_guard)
-    assert "needs explicit confirmation" in response
+    await session._run_tool("fake_t2", {}, safe_guard)
+    await session.handle_message({"type": "confirm_response", "confirmed": False})
+
+    calls = [c.args[0] for c in mock_ws.send_json.await_args_list]
+    delta = next(c for c in calls if c.get("type") == "delta")
+    assert "cancelled" in delta["text"]
+    assert calls[-1] == {"type": "done"}
+
+
+async def test_chat_refuses_tier_three_tool(mock_ws, safe_guard):
+    """Tier-3 tools are hard-blocked in the web/voice interface."""
+    from ev.server.chat import ChatSession
+    from ev.tools.registry import Tool
+
+    class FakeT3Tool(Tool):
+        def __init__(self):
+            super().__init__("fake_t3", 3, "Test tier-3 tool")
+
+        async def run(self, **kwargs):
+            return "should not run"
+
+    session = ChatSession(mock_ws)
+    session._register_tools = lambda r: r.register(FakeT3Tool())
+
+    response = await session._run_tool("fake_t3", {}, safe_guard)
+    assert "permanently blocked" in response
+    assert "tier 3" in response
 
 
 @patch("ev.server.chat.LLMClient")

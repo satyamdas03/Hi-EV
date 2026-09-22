@@ -34,8 +34,27 @@ from ev.tools.work_tool import WorkTool
 logger = logging.getLogger(__name__)
 
 
-# T0 = read-only auto, T1 = reversible write auto, T2/T3 require confirmation.
+# T0 = read-only auto, T1 = reversible write auto, T2 requires confirmation,
+# T3 is permanently blocked in the web/voice interface.
 TIER_CONFIRMATION = {2: True, 3: True}
+
+
+class ConfirmationRequired:
+    """Sentinel returned when a tool needs explicit user confirmation."""
+
+    def __init__(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        prompt: str,
+        guard_decision,
+        route: str | None,
+    ):
+        self.tool_name = tool_name
+        self.args = args
+        self.prompt = prompt
+        self.guard_decision = guard_decision
+        self.route = route
 
 
 # Map natural intent names returned by the LLM to the actual Tool.name values.
@@ -64,6 +83,7 @@ class ChatSession:
         self._stop_event = asyncio.Event()
         self.thread_id: str | None = None
         self._pending_thread_id = thread_id
+        self._pending_confirmation: dict[str, Any] | None = None
         self.system_prompt = (
             "You are EV, a local-first personal AI operating system. You are helpful, concise, "
             "and you only act on the user's personal projects and data. You refuse requests "
@@ -114,6 +134,8 @@ class ChatSession:
             await self._ensure_thread()
             await self._load_history()
             await self._on_transcript(data.get("text", ""))
+        elif msg_type == "confirm_response":
+            await self._on_confirm_response(data)
         elif msg_type == "stop":
             await self._on_stop()
         elif msg_type == "ping":
@@ -132,6 +154,11 @@ class ChatSession:
 
         # Reset any previous stop request before starting a new turn.
         self._stop_event.clear()
+
+        # A new user utterance cancels any outstanding confirmation request.
+        if self._pending_confirmation:
+            self._pending_confirmation = None
+            await self._send_json({"type": "phase", "phase": "cancelled"})
 
         # Guard runs before any intent classification or tool dispatch.
         guard_decision = self.guard.check(text, source="user", trusted=True)
@@ -171,6 +198,11 @@ class ChatSession:
         except Exception as exc:  # noqa: BLE001
             logger.warning("Chat resolution failed: %s", exc)
             response = f"EV had a problem handling that: {exc}"
+
+        if isinstance(response, ConfirmationRequired):
+            # The confirmation request has already been sent to the client.
+            # Do not emit done; the turn completes when the user responds.
+            return
 
         await self._persist_turn("assistant", response, tool_name=intent if intent != "chat" else None, route=route_value)
         self.history.append({"role": "assistant", "content": response})
@@ -234,11 +266,11 @@ class ChatSession:
         text: str,
         guard_decision,
         route=None,
-    ) -> str:
+    ) -> str | ConfirmationRequired:
         if intent == "chat":
             return await self._answer_chat(text, route=route)
 
-        return await self._run_tool(intent, args, guard_decision=guard_decision)
+        return await self._run_tool(intent, args, guard_decision=guard_decision, route=route)
 
     async def _classify_intent(self, text: str) -> tuple[str, dict[str, Any]]:
         """Use the LLM to map a user utterance to a tool + arguments.
@@ -300,7 +332,7 @@ class ChatSession:
         ]
         return await self.client.complete(messages, temperature=0.7, max_tokens=1024)
 
-    async def _run_tool(self, intent: str, args: dict[str, Any], guard_decision) -> str:
+    async def _run_tool(self, intent: str, args: dict[str, Any], guard_decision, route=None) -> str | ConfirmationRequired:
         from ev.tools.registry import ToolTierError
 
         async with SessionLocal() as session:
@@ -314,11 +346,37 @@ class ChatSession:
             except ToolTierError as exc:
                 return str(exc)
 
-            # Refuse T2/T3 actions outright in the MVP web UI.
-            if tool.tier in TIER_CONFIRMATION:
+            # T3 actions are permanently blocked in the voice/web interface.
+            if tool.tier == 3:
                 return (
-                    f"The '{intent}' action is tier {tool.tier} and needs explicit confirmation "
-                    "in the CLI. I can't run it from the voice/web interface yet."
+                    f"The '{intent}' action is tier 3 (destructive or high-risk) and is "
+                    "permanently blocked in the web/voice interface for safety."
+                )
+
+            # T2 actions require explicit confirmation before running.
+            if tool.tier == 2:
+                prompt = self._build_confirm_prompt(tool, intent, args)
+                self._pending_confirmation = {
+                    "tool_name": intent,
+                    "args": args,
+                    "prompt": prompt,
+                    "guard_decision": guard_decision,
+                    "route": route,
+                }
+                await self._send_json({
+                    "type": "confirm",
+                    "tool": intent,
+                    "tier": tool.tier,
+                    "risk": "consequential",
+                    "prompt": prompt,
+                    "args": args,
+                })
+                return ConfirmationRequired(
+                    tool_name=intent,
+                    args=args,
+                    prompt=prompt,
+                    guard_decision=guard_decision,
+                    route=route,
                 )
 
             try:
@@ -328,6 +386,61 @@ class ChatSession:
                 return f"EV couldn't run {intent}: {exc}"
 
             return self._format_result(intent, result)
+
+    def _build_confirm_prompt(self, tool, intent: str, args: dict[str, Any]) -> str:
+        """Human-readable summary of a T2 action for the confirmation modal."""
+        arg_summary = ", ".join(f"{k}={v!r}" for k, v in args.items())
+        return (
+            f"EV wants to run '{intent}' — {tool.description}. "
+            f"Arguments: {arg_summary}. This is a consequential action. Confirm?"
+        )
+
+    async def _on_confirm_response(self, data: dict[str, Any]) -> None:
+        """Handle the user's response to a pending T2 confirmation request."""
+        if not self._pending_confirmation:
+            await self._send_error("No pending confirmation")
+            return
+
+        pending = self._pending_confirmation
+        confirmed = bool(data.get("confirmed", False))
+        self._pending_confirmation = None
+
+        if not confirmed:
+            reply = f"'{pending['tool_name']}' cancelled."
+            await self._persist_turn("assistant", reply, tool_name=pending["tool_name"], route=pending["route"])
+            self.history.append({"role": "assistant", "content": reply})
+            if len(self.history) > 20:
+                self.history = self.history[-20:]
+            await self._send_json({"type": "delta", "text": reply})
+            await self._send_json({"type": "done"})
+            return
+
+        await self._send_json({"type": "phase", "phase": "acting"})
+        try:
+            result = await self._run_confirmed_tool(
+                pending["tool_name"], pending["args"], pending["guard_decision"]
+            )
+            response = self._format_result(pending["tool_name"], result)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Confirmed tool %s failed: %s", pending["tool_name"], exc)
+            response = f"EV couldn't run {pending['tool_name']}: {exc}"
+
+        await self._persist_turn("assistant", response, tool_name=pending["tool_name"], route=pending["route"])
+        self.history.append({"role": "assistant", "content": response})
+        if len(self.history) > 20:
+            self.history = self.history[-20:]
+
+        await self._send_json({"type": "delta", "text": response})
+        await self._send_json({"type": "done"})
+
+    async def _run_confirmed_tool(self, intent: str, args: dict[str, Any], guard_decision) -> Any:
+        """Run a tool that the user has already confirmed in the web/voice UI."""
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            registry = ToolRegistry(store)
+            self._register_tools(registry)
+            tool = registry.get(intent, guard_decision=guard_decision)
+            return await tool.run(**args)
 
     def _register_tools(self, registry: ToolRegistry) -> None:
         registry.register(StatusTool())

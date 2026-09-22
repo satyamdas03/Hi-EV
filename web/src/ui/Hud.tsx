@@ -1,6 +1,7 @@
 import { useStore, type Phase } from '../store'
 import { Alerts } from './Alerts'
 import { Chat } from './Chat'
+import { ConfirmModal } from './ConfirmModal'
 import { Threads } from './Threads'
 import type { EvBridge } from '../lib/bridge'
 
@@ -56,6 +57,8 @@ export function Hud({ bridge }: { bridge: EvBridge }) {
       <Threads bridge={bridge} />
 
       <Chat bridge={bridge} />
+
+      <ConfirmModal bridge={bridge} />
 
       {caption && (
         <div className="caption">{caption}</div>

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { EvBridge } from './lib/bridge'
 import { getMicLevel } from './lib/audio'
-import { startListening, stopListening, handleBridgeEvent } from './lib/voice'
+import { startListening, stopListening, handleBridgeEvent, startWakeListening, stopWakeListening } from './lib/voice'
 import { useStore } from './store'
 import { Scene } from './scene/Scene'
 import { Boot } from './ui/Boot'
@@ -17,6 +17,18 @@ export function App() {
   const setConnected = useStore((s) => s.setConnected)
   const setLevel = useStore((s) => s.setLevel)
   const setError = useStore((s) => s.setError)
+  const focusRequested = useStore((s) => s.focusRequested)
+  const clearFocusRequest = useStore((s) => s.clearFocusRequest)
+
+  useEffect(() => {
+    if (!focusRequested) return
+    clearFocusRequest()
+    window.focus()
+    const phase = useStore.getState().phase
+    if (phase === 'dormant' || phase === 'speaking' || phase === 'thinking') {
+      void startListening(bridge)
+    }
+  }, [focusRequested, clearFocusRequest, bridge])
 
   useEffect(() => {
     let raf = 0
@@ -42,6 +54,24 @@ export function App() {
     bridge.connect()
     return () => bridge.disconnect()
   }, [bridge, setConnected, setError])
+
+  useEffect(() => {
+    const unsubscribe = useStore.subscribe((state) => {
+      if (state.phase === 'dormant') {
+        startWakeListening(bridge)
+      } else {
+        stopWakeListening()
+      }
+    })
+    // Prime it once with the current phase.
+    if (useStore.getState().phase === 'dormant') {
+      startWakeListening(bridge)
+    }
+    return () => {
+      unsubscribe()
+      stopWakeListening()
+    }
+  }, [bridge])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

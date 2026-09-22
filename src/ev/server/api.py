@@ -420,6 +420,16 @@ class ThreadRenameRequest(BaseModel):
     title: str
 
 
+@app.post("/focus")
+async def focus_endpoint():
+    """Desktop hotkey/tray hook: notify all connected HUD clients to come to foreground."""
+    focus_payload = {"type": "focus"}
+    for ws in list(getattr(app.state, "active_websockets", set())):
+        with suppress(Exception):
+            await ws.send_json(focus_payload)
+    return {"focused": True, "clients": len(getattr(app.state, "active_websockets", set()))}
+
+
 @app.post("/threads")
 async def create_thread(req: ThreadCreateRequest):
     async with SessionLocal() as session:

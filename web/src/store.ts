@@ -26,6 +26,14 @@ export type Alert = {
   receivedAt: number
 }
 
+export type PendingConfirmation = {
+  tool: string
+  tier: number
+  risk: string
+  prompt: string
+  args: Record<string, unknown>
+}
+
 export interface EvState {
   phase: Phase
   turns: Turn[]
@@ -38,6 +46,8 @@ export interface EvState {
   activeTool: string | null
   isStreaming: boolean
   streamPhase: string | null
+  pendingConfirmation: PendingConfirmation | null
+  focusRequested: boolean
 
   setPhase: (phase: Phase) => void
   addUserTurn: (text: string) => void
@@ -50,6 +60,9 @@ export interface EvState {
   setError: (error: string | null) => void
   setBootNote: (note: string | null) => void
   setActiveTool: (tool: string | null) => void
+  setPendingConfirmation: (confirmation: PendingConfirmation | null) => void
+  requestFocus: () => void
+  clearFocusRequest: () => void
   startStream: (phase: string) => void
   stopStream: () => void
   clearError: () => void
@@ -69,6 +82,8 @@ export const useStore = create<EvState>((set) => ({
   activeTool: null,
   isStreaming: false,
   streamPhase: null,
+  pendingConfirmation: null,
+  focusRequested: false,
 
   setPhase: (phase) => set({ phase }),
 
@@ -122,5 +137,8 @@ export const useStore = create<EvState>((set) => ({
   setError: (error) => set({ error }),
   setBootNote: (note) => set({ bootNote: note }),
   setActiveTool: (tool) => set({ activeTool: tool }),
+  setPendingConfirmation: (pendingConfirmation) => set({ pendingConfirmation }),
+  requestFocus: () => set({ focusRequested: true }),
+  clearFocusRequest: () => set({ focusRequested: false }),
   clearError: () => set({ error: null }),
 }))

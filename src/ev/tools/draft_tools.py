@@ -10,10 +10,10 @@ from .registry import Tool
 
 
 class DraftTool(Tool):
-    """Base class for Tier-1 drafting tools."""
+    """Base class for Tier-2 drafting tools."""
 
     def __init__(self, name: str, description: str):
-        super().__init__(name=name, tier=1, description=description)
+        super().__init__(name=name, tier=2, description=description)
         self._llm = LLMClient()
         self.store = None
 

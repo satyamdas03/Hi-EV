@@ -119,3 +119,19 @@ def test_websocket_ping():
         ws.send_json({"type": "ping"})
         data = ws.receive_json()
         assert data["type"] == "pong"
+
+
+def test_focus_endpoint_notifies_clients():
+    """POST /focus sends a focus event to every connected WebSocket client."""
+    from fastapi.testclient import TestClient
+
+    from ev.server.api import app
+
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        response = client.post("/focus")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["focused"] is True
+        assert data["clients"] >= 1
+        focus = ws.receive_json()
+        assert focus["type"] == "focus"

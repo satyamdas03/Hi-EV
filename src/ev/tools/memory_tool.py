@@ -55,12 +55,12 @@ class MemoryTool(Tool):
 
 
 class RememberTool(Tool):
-    """Tier-0 user-initiated write that stores a sentence in semantic memory."""
+    """Tier-1 user-initiated write that stores a sentence in semantic memory."""
 
     def __init__(self, chunker: Chunker | None = None):
         super().__init__(
             name="remember",
-            tier=0,
+            tier=1,
             description="Store a user sentence in semantic memory",
         )
         self.chunker = chunker or Chunker()

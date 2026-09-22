@@ -1,4 +1,4 @@
-"""Tests for Tier-1 reversible drafting tools."""
+"""Tests for Tier-2 consequential drafting tools."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -35,7 +35,7 @@ async def test_draft_commit_from_staged_diff(mock_run, mock_llm, store):
     result = await tool.run(project="RoboCAD")
 
     assert "feat: add solver stub" in result["draft"]
-    assert result["tier"] == 1
+    assert result["tier"] == 2
     # LLM prompt contains staged diff
     prompt = llm.complete.call_args.kwargs["messages"][0]["content"]
     assert "diff --git" in prompt
@@ -58,7 +58,7 @@ async def test_draft_pr_from_branch_diff(mock_run, mock_llm, store):
     result = await tool.run(project="RoboCAD")
 
     assert "Add new feature" in result["draft"]
-    assert result["tier"] == 1
+    assert result["tier"] == 2
 
 
 @patch("ev.tools.draft_tools.LLMClient")
@@ -71,7 +71,7 @@ async def test_draft_reply(mock_llm):
     result = await tool.run(to="recruiter@example.com", subject="Opportunity", thread_snippet="We have a role...")
 
     assert "Thanks for reaching out" in result["draft"]
-    assert result["tier"] == 1
+    assert result["tier"] == 2
     prompt = llm.complete.call_args.kwargs["messages"][0]["content"]
     assert "recruiter@example.com" in prompt
     assert "We have a role" in prompt

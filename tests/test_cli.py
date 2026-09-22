@@ -54,7 +54,16 @@ def test_brief_command(seeded_store):
 
 
 @patch("ev.tools.work_tool.asyncio.create_subprocess_exec")
-def test_work_command(mock_create, seeded_store):
+def test_work_command_requires_confirmation(mock_create, seeded_store):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["work", "on", "fix failing test in Phase 29", "--project", "RoboCAD"])
+    assert result.exit_code == 1  # click.confirm aborts without input
+    assert "Spawn Claude Code" in result.output
+    mock_create.assert_not_called()
+
+
+@patch("ev.tools.work_tool.asyncio.create_subprocess_exec")
+def test_work_command_with_yes(mock_create, seeded_store):
     process = MagicMock()
     process.stdin = MagicMock()
     process.stdin.drain = AsyncMock()
@@ -64,7 +73,7 @@ def test_work_command(mock_create, seeded_store):
     mock_create.return_value = process
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["work", "on", "fix failing test in Phase 29", "--project", "RoboCAD"])
+    result = runner.invoke(cli, ["work", "on", "fix failing test in Phase 29", "--project", "RoboCAD", "--yes"])
     assert result.exit_code == 0
     assert "RoboCAD" in result.output
     assert "1234" in result.output
@@ -73,42 +82,69 @@ def test_work_command(mock_create, seeded_store):
 
 @patch("ev.tools.draft_tools.LLMClient")
 @patch("ev.tools.draft_tools.subprocess.run")
-def test_draft_commit_command(mock_run, mock_llm, seeded_store):
+def test_draft_commit_command_requires_confirmation(mock_run, mock_llm, seeded_store):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["draft", "commit", "--project", "RoboCAD"])
+    assert result.exit_code == 1
+    assert "Draft a commit message" in result.output
+
+
+@patch("ev.tools.draft_tools.LLMClient")
+@patch("ev.tools.draft_tools.subprocess.run")
+def test_draft_commit_command_with_yes(mock_run, mock_llm, seeded_store):
     mock_run.return_value = MagicMock(stdout="diff --git a/x.py b/x.py\n+def f(): pass", stderr="", returncode=0)
     llm = MagicMock()
     llm.complete = AsyncMock(return_value="feat: add f")
     mock_llm.return_value = llm
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["draft", "commit", "--project", "RoboCAD"])
+    result = runner.invoke(cli, ["draft", "commit", "--project", "RoboCAD", "--yes"])
     assert result.exit_code == 0
     assert "feat: add f" in result.output
 
 
 @patch("ev.tools.draft_tools.LLMClient")
 @patch("ev.tools.draft_tools.subprocess.run")
-def test_draft_pr_command(mock_run, mock_llm, seeded_store):
+def test_draft_pr_command_with_yes(mock_run, mock_llm, seeded_store):
     mock_run.return_value = MagicMock(stdout="diff --git a/y.py b/y.py\n+def g(): pass", stderr="", returncode=0)
     llm = MagicMock()
     llm.complete = AsyncMock(return_value="Title: Add g\n\nBody: adds g")
     mock_llm.return_value = llm
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["draft", "pr", "--project", "RoboCAD"])
+    result = runner.invoke(cli, ["draft", "pr", "--project", "RoboCAD", "--yes"])
     assert result.exit_code == 0
     assert "Add g" in result.output
 
 
 @patch("ev.tools.draft_tools.LLMClient")
-def test_draft_reply_command(mock_llm):
+def test_draft_reply_command_with_yes(mock_llm):
     llm = MagicMock()
     llm.complete = AsyncMock(return_value="Thanks, let's talk soon.")
     mock_llm.return_value = llm
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["draft", "reply", "--to", "recruiter@example.com", "--subject", "Role", "--snippet", "We have a role"])
+    result = runner.invoke(cli, ["draft", "reply", "--to", "recruiter@example.com", "--subject", "Role", "--snippet", "We have a role", "--yes"])
     assert result.exit_code == 0
     assert "Thanks, let's talk soon" in result.output
+
+
+@patch("ev.tools.work_tool.asyncio.create_subprocess_exec")
+def test_work_command_interactive_confirm(mock_create, seeded_store):
+    """A 'y' response to the interactive prompt runs the T2 action."""
+    process = MagicMock()
+    process.stdin = MagicMock()
+    process.stdin.drain = AsyncMock()
+    process.stdout = MagicMock()
+    process.stderr = MagicMock()
+    process.pid = 1234
+    mock_create.return_value = process
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["work", "on", "fix failing test in Phase 29", "--project", "RoboCAD"], input="y\n")
+    assert result.exit_code == 0
+    assert "1234" in result.output
+    mock_create.assert_called_once()
 
 
 @patch("ev.research.search.httpx.AsyncClient")

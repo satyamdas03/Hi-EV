@@ -107,8 +107,18 @@ def work():
 @work.command()
 @click.argument("task")
 @click.option("--project", required=True, help="Project to work on")
-def on(task: str, project: str):
+@click.option("--yes", "-y", "confirm", is_flag=True, help="Skip interactive confirmation")
+def on(task: str, project: str, confirm: bool):
     """Spawn Claude Code in PROJECT with TASK context."""
+    if not confirm:
+        confirm = click.confirm(
+            f"Spawn Claude Code for '{project}' with task: {task}?",
+            default=False,
+        )
+    if not confirm:
+        click.echo("EV: cancelled.")
+        return
+
     async def _run():
         async with SessionLocal() as session:
             store = MemoryStore(session)
@@ -131,8 +141,18 @@ def draft():
 
 @draft.command()
 @click.option("--project", required=True, help="Project to draft a commit for")
-def commit(project: str):
+@click.option("--yes", "-y", "confirm", is_flag=True, help="Skip interactive confirmation")
+def commit(project: str, confirm: bool):
     """Draft a commit message from staged changes."""
+    if not confirm:
+        confirm = click.confirm(
+            f"Draft a commit message for '{project}' from staged changes?",
+            default=False,
+        )
+    if not confirm:
+        click.echo("EV: cancelled.")
+        return
+
     async def _run():
         async with SessionLocal() as session:
             store = MemoryStore(session)
@@ -148,8 +168,18 @@ def commit(project: str):
 
 @draft.command()
 @click.option("--project", required=True, help="Project to draft a PR for")
-def pr(project: str):
+@click.option("--yes", "-y", "confirm", is_flag=True, help="Skip interactive confirmation")
+def pr(project: str, confirm: bool):
     """Draft a PR title and body from the branch diff vs main."""
+    if not confirm:
+        confirm = click.confirm(
+            f"Draft a PR for '{project}' from the current branch diff?",
+            default=False,
+        )
+    if not confirm:
+        click.echo("EV: cancelled.")
+        return
+
     async def _run():
         async with SessionLocal() as session:
             store = MemoryStore(session)
@@ -167,8 +197,18 @@ def pr(project: str):
 @click.option("--to", required=True, help="Recipient email address")
 @click.option("--subject", required=True, help="Email subject")
 @click.option("--snippet", required=True, help="Original message snippet")
-def reply(to: str, subject: str, snippet: str):
+@click.option("--yes", "-y", "confirm", is_flag=True, help="Skip interactive confirmation")
+def reply(to: str, subject: str, snippet: str, confirm: bool):
     """Draft an email reply."""
+    if not confirm:
+        confirm = click.confirm(
+            f"Draft a reply to '{to}' about '{subject}'?",
+            default=False,
+        )
+    if not confirm:
+        click.echo("EV: cancelled.")
+        return
+
     async def _run():
         registry = ToolRegistry(None)
         registry.register(DraftReplyTool())

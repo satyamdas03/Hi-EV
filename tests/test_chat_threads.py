@@ -38,7 +38,7 @@ async def test_add_and_list_chat_turns():
         store = MemoryStore(session)
         thread = await store.create_chat_thread(title="Test thread")
         t1 = await store.add_chat_turn(thread.id, "user", "hello")
-        t2 = await store.add_chat_turn(thread.id, "assistant", "hi there", tool_name="chat")
+        await store.add_chat_turn(thread.id, "assistant", "hi there", tool_name="chat")
         turns = await store.list_chat_turns(thread.id)
         assert len(turns) == 2
         assert turns[0].id == t1.id

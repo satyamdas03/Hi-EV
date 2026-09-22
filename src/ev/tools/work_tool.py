@@ -9,12 +9,12 @@ from .registry import Tool
 
 
 class WorkTool(Tool):
-    """Tier-1 tool that spawns Claude Code in a repo with task context."""
+    """Tier-2 tool that spawns Claude Code in a repo with task context."""
 
     def __init__(self):
         super().__init__(
             name="work_on",
-            tier=1,
+            tier=2,
             description="Spawn Claude Code CLI in a project repo with prepared context",
         )
 

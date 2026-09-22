@@ -75,6 +75,14 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: str | None = None
 
+    # Phase D — Desktop presence and safe autonomy.
+    base_url: str = Field(default="http://127.0.0.1:7345")
+    global_hotkey_enabled: bool = Field(default=True)
+    global_hotkey_combo: str = Field(default="ctrl+alt+e")
+    tray_widget_enabled: bool = Field(default=False)
+    wake_word_enabled: bool = Field(default=False)
+    wake_word_phrase: str = Field(default="hey ev")
+
     # Guard model / prompt-injection classifier settings.
     guard_llm_enabled: bool = Field(default=True)
     guard_caution_threshold: float = Field(default=0.6)

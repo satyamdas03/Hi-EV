@@ -8,7 +8,7 @@ import pytest
 
 from ev.db.base import Base, SessionLocal, engine
 from ev.memory.store import MemoryStore
-from ev.server.api import _alert_loop, _brief_loop
+from ev.server.api import _alert_loop
 from ev.server.telegram import TelegramRelay
 
 
