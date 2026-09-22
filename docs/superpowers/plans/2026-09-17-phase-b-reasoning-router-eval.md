@@ -159,11 +159,9 @@ Phase B installs the measurement and routing layer that every future phase (proa
 
 ---
 
-## Follow-up (Phase C preview)
+## Follow-up
 
-After Phase B, the next layer is **proactive alerts + persistent context**:
-- Push deadline/alerts over WebSocket to the HUD.
-- Persistent `ChatThread` table + preference learning.
-- Morning brief scheduler.
+Phase B is the prerequisite for Phase C because it gives us the router to decide *what* to stream and the eval harness to know *whether* the proactive content is any good.
 
-Phase B is the prerequisite because it gives us the router to decide *what* to stream and the eval harness to know *whether* the proactive content is any good.
+**Next:** [Phase C — Proactive Alerts + Persistent Context](2026-09-22-phase-c-proactive-context.md) is complete; see the linked plan.
+**Current:** [Phase D — Safe Autonomy + Desktop Presence](2026-09-22-phase-d-safe-autonomy.md) is also complete.

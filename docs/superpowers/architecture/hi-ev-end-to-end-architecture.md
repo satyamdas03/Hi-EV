@@ -18,12 +18,13 @@ flowchart TB
         direction TB
         Daemon["evd — FastAPI daemon\n127.0.0.1:7345"]
         WebFrontend["web/ — React + Three.js HUD"]
+        DesktopPresence["scripts/\nglobal_hotkey.py + tray_widget.py\n(Phase D skeleton)"]
         LocalDB[("SQLite + sqlite-vec\n~/.hiev/hiev.db")]
     end
 
     subgraph Cloud["☁️ Optional Cloud Relay"]
         Relay["Webhook ingress\nQueue when laptop sleeps"]
-        Telegram["Telegram bot\n(Phase C)"]
+        Telegram["Telegram bot\n(Phase C skeleton)"]
     end
 
     subgraph External["🌐 External APIs"]
@@ -36,6 +37,7 @@ flowchart TB
     Voice --"SpeechRecognition"--> Browser
     Browser --"WebSocket /ws"--> Daemon
     CLI --"HTTP API"--> Daemon
+    DesktopPresence --"POST /focus"--> Daemon
     Daemon --"REST / streaming"--> LLMAPI
     Daemon --"REST"--> GitHubAPI
     Daemon --"OAuth2"--> GoogleAPI
@@ -66,6 +68,7 @@ flowchart TB
         Intent["_classify_intent()"]
         Stream["_stream_chat()"]
         ToolRun["_run_tool()"]
+        Confirm["_pending_confirmation\nconfirm/confirm_response"]
     end
 
     subgraph Reasoning["src/ev/reasoning/router.py"]
@@ -86,8 +89,8 @@ flowchart TB
         MemoryTool["MemoryTool (T0)"]
         ResearchTool["ResearchTool (T0)"]
         PrepTool["PrepTool (T0)"]
-        WorkTool["WorkTool (T1)"]
-        DraftTools["DraftCommitTool / DraftPrTool / DraftReplyTool (T1)"]
+        WorkTool["WorkTool (T2)"]
+        DraftTools["DraftCommitTool / DraftPrTool / DraftReplyTool (T2)"]
     end
 
     subgraph Memory["src/ev/memory/"]
@@ -116,6 +119,7 @@ flowchart TB
     ChatSession --> Intent
     ChatSession --> Stream
     ChatSession --> ToolRun
+    ChatSession --> Confirm
     ChatSession --> History
 
     GuardCheck --> Guard
@@ -205,8 +209,23 @@ sequenceDiagram
             FE->>TTS: speak full response
         else tool intent
             CS->>TR: get(tool, guard_decision=...)
-            TR->>Mem: query / upsert / search
-            TR-->>CS: result text
+            alt T2 tool
+                CS-->>WS: type=confirm, tool, args, prompt
+                WS-->>FE: show ConfirmModal
+                U->>FE: Confirm / Deny
+                FE->>WS: type=confirm_response, confirmed=true/false
+                WS->>CS: _on_confirm_response
+                alt confirmed
+                    CS-->>WS: phase=acting
+                    TR->>Mem: query / upsert / search
+                    TR-->>CS: result text
+                else denied
+                    CS-->>CS: reply = cancelled
+                end
+            else T0/T1 tool
+                TR->>Mem: query / upsert / search
+                TR-->>CS: result text
+            end
             CS-->>WS: delta=result, done
             WS-->>FE: render result
             FE->>TTS: speak result
@@ -270,8 +289,9 @@ flowchart TB
         Hybrid["Hybrid search:\nKNN + keyword + recency + source"]
     end
 
-    subgraph Episodic["3. Episodic log"]
+    subgraph Episodic["3. Episodic log + chat threads"]
         Events["events table\nevery turn, tool call, decision"]
+        Threads["chat_threads + chat_turns\npersistent conversation"]
     end
 
     subgraph Retrieval["Retrieval Router"]
@@ -352,7 +372,11 @@ stateDiagram-v2
     dormant --> listening: hold Space / click
     listening --> thinking: transcript sent
     thinking --> streaming: fast path + stream enabled
-    thinking --> speaking: tool result / non-stream chat
+    thinking --> confirm: T2 tool intent
+    thinking --> speaking: T0/T1 tool / non-stream chat
+    confirm --> acting: user confirms
+    confirm --> dormant: user denies / timeout
+    acting --> speaking: tool result
     streaming --> speaking: done
     speaking --> dormant: TTS finished
     streaming --> dormant: STOP button / stop message
@@ -370,11 +394,10 @@ gantt
     section Completed
     Phase A :done, a, 2026-09-01, 2026-09-17
     Phase B :done, b, 2026-09-17, 2026-09-19
+    Phase C :done, c, 2026-09-19, 2026-09-22
+    Phase D :done, d, 2026-09-22, 2026-10-06
     section In Progress / Next
-    Phase C :active, c, 2026-09-19, 2026-10-10
-    section Planned
-    Phase D :d, 2026-10-10, 2026-11-10
-    Phase E :e, 2026-11-10, 2026-12-25
+    Phase E :active, e, 2026-10-06, 2026-11-24
 ```
 
 ---
@@ -430,6 +453,7 @@ flowchart TB
 | Memory | `src/ev/memory/store.py`, `src/ev/memory/chunks.py`, `src/ev/db/vector.py` |
 | Ingestion | `src/ev/ingestion/notes.py`, `github.py`, `gmail.py`, `calendar.py` |
 | Database | `src/ev/db/models.py`, `src/ev/db/base.py` |
-| Frontend | `web/src/App.tsx`, `store.ts`, `lib/bridge.ts`, `lib/voice.ts`, `ui/Chat.tsx`, `scene/Scene.tsx` |
+| Frontend | `web/src/App.tsx`, `store.ts`, `lib/bridge.ts`, `lib/voice.ts`, `ui/Chat.tsx`, `ui/ConfirmModal.tsx`, `ui/Threads.tsx`, `ui/Alerts.tsx`, `scene/Scene.tsx` |
+| Desktop presence | `scripts/global_hotkey.py`, `scripts/tray_widget.py` |
 | Eval | `tests/eval/`, `scripts/run_eval.py` |
 | Config | `src/ev/config.py`, `.env` |

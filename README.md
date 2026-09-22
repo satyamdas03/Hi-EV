@@ -4,6 +4,13 @@
 
 EV is not a chatbot. It is the persistent operating system for a single human — you — sitting above all your personal projects, tools, and data. When you open your laptop, EV is already there. It has read what changed overnight, tracked your deadlines, and is ready to work by voice or text.
 
+## Current status
+
+- **Phases A–D are complete and pushed to `origin/main`.**
+- **Tests:** 197 passed, 1 skipped; **ruff:** clean; **frontend build:** clean.
+- **Live smoke test:** Phase D confirmation flow verified end-to-end against the running daemon on `127.0.0.1:7345`.
+- **Phase E** (local STT/TTS, HTML blades, tool self-authoring, packaged desktop presence) is next.
+
 ---
 
 ## What EV is
@@ -63,9 +70,9 @@ EV is not a chatbot. It is the persistent operating system for a single human �
 │          ┌───────────────┼───────────────┐                                 │
 │          ▼               ▼               ▼                                 │
 │   ┌──────────┐    ┌──────────┐    ┌──────────────┐                        │
-│   │ Local    │    │ Local    │    │ Tool Registry │                        │
-│   │ Postgres │    │ Redis    │    │  - git / gh   │                        │
-│   │ +pgvector│    │ cache    │    │  - Claude Code│                        │
+│   │ SQLite   │    │ Local    │    │ Tool Registry │                        │
+│   │ +sqlite- │    │ Redis    │    │  - git / gh   │                        │
+│   │ vec      │    │ cache    │    │  - Claude Code│                        │
 │   │          │    │          │    │  - pytest     │                        │
 │   │ structured│    │ rate     │    │  - shell      │                        │
 │   │ docs     │    │ limits   │    │  - browser    │                        │
@@ -140,7 +147,7 @@ Every tool and action in EV has a tier. The tier is enforced in code, not in a p
 
 ## Memory model
 
-Three distinct stores in a single local Postgres database. One vector DB is not enough.
+Three distinct stores in a single local database (SQLite + sqlite-vec by default; Postgres + pgvector optional). One vector DB is not enough.
 
 ### 1. Structured facts
 
@@ -161,11 +168,12 @@ Chunked, embedded, searchable documents.
 - Hybrid search: BM25 keyword + vector similarity + rerank.
 - Provenance attached to every chunk.
 
-### 3. Episodic log
+### 3. Episodic log + chat threads
 
-Append-only record of everything that happened.
+Append-only record of everything that happened, plus persistent chat threads.
 
 - Every user message, every tool call, every result, every decision.
+- `ChatThread`/`ChatTurn` tables survive browser reconnects and page reloads.
 - Enables *"why did I decide that?"* and *"what happened on Tuesday?"*
 
 ### Retrieval router
@@ -257,9 +265,9 @@ Every tool is a typed Python function with:
 - `read_repo_file(path)` — T0
 - `run_tests(repo, selector)` — T1
 - `create_branch(repo, name)` — T1
-- `draft_pr(repo, title, body)` — T1
-- `spawn_claude_code(repo, task, context)` — T1
-- `draft_email(to, subject, body)` — T1
+- `draft_pr(repo, title, body)` — T2
+- `spawn_claude_code(repo, task, context)` — T2
+- `draft_email(to, subject, body)` — T2
 - `send_email(draft_id)` — T2
 - `push_branch(repo, branch)` — T2
 - `merge_pr(repo, pr_number)` — T2
@@ -301,99 +309,50 @@ Instantly:
 
 ## Phased roadmap
 
-### Phase 1 — Foundation (1–2 weeks)
+### Phase A — Ambient Ingestion + Semantic Memory ✅ COMPLETE
+**Goal:** EV keeps itself up to date and answers questions over documents, not just structured rows.
+- SQLite + sqlite-vec default; Postgres + pgvector optional.
+- Continuous ingestion scheduler for notes, GitHub, Gmail, Calendar.
+- Document chunking, local embeddings, hybrid search.
+- `ev remember` and `POST /remember` explicit memory capture.
 
-**Goal:** EV exists as a CLI daemon on the RTX 5060 laptop and can answer basic status questions about personal repos.
+### Phase B — Reasoning Router + Eval Harness ✅ COMPLETE
+**Goal:** EV chooses the right reasoning depth per request, streams responses, and we can measure quality.
+- Heuristic fast/agent/deliberate router with optional LLM fallback.
+- `LLMClient.complete_stream()` + streaming fast-chat path over WebSocket.
+- Eval harness under `tests/eval/` with judge and `scripts/run_eval.py`.
+- Guard model with SAFE/CAUTION/BLOCKED and source-trust tier downgrades.
 
-**Deliverables:**
-1. Repo scaffold: `evd` daemon, FastAPI internal API, Postgres schema, CLI entrypoint.
-2. GitHub personal repo ingestion (commits, issues, PRs, actions).
-3. Local notes vault ingestion.
-4. First memory query: `ev status <project>` returns a synthesized paragraph.
-5. Voice skeleton: hotkey → Whisper → intent → LLM → TTS.
-6. Basic audit log.
+### Phase C — Proactive Alerts + Persistent Context ✅ COMPLETE
+**Goal:** EV speaks first and remembers the conversation.
+- WebSocket proactive `alert` events from daemon lifespan `_alert_loop`.
+- `ChatThread`/`ChatTurn` persistence with REST CRUD and resume across reconnects.
+- Morning brief scheduler and optional Telegram relay skeleton.
 
-**Acceptance criteria:**
-- `ev status RoboCAD` returns accurate one-paragraph status from repo history.
-- Voice hotkey works and answers a simple question.
-- All ingestion is idempotent.
-- No work accounts or repos are ingested.
+### Phase D — Safe Autonomy + Desktop Presence ✅ COMPLETE
+**Goal:** EV acts safely within tiered rules and lives outside the browser.
+- T2 confirmation flow in WebSocket/voice/CLI; T3 hard-blocked in web/voice.
+- Tool tier audit: `work_on`, `draft_commit`, `draft_pr`, `draft_reply` → T2; `remember` → T1.
+- Desktop presence skeleton: global hotkey (`Ctrl+Alt+E`), system-tray widget, browser wake word ("hey ev"), `POST /focus`.
+- Live end-to-end smoke test passed against the running daemon.
 
-### Phase 2 — Presence + Status + Research (2–3 weeks)
-
-**Goal:** EV feels like a real assistant: briefs, research, drafting, and Claude Code spawning.
-
-**Deliverables:**
-1. CLI daemon with hotkey/tray integration.
-2. `ev brief` — morning/now status across all projects.
-3. `ev status <project>` with full context: commits, open PRs, issues, recent decisions.
-4. Read-only web research with citations: `ev research <query>`.
-5. Tier 1 drafting: commit messages, PR descriptions, email drafts, meeting prep.
-6. `ev work on <task>` — spawn Claude Code CLI with prepared context.
-7. Personal Gmail + Calendar read-only ingestion (optional if risky).
-
-**Acceptance criteria:**
-- `ev brief` takes under 10 seconds and surfaces active projects, deadlines, and stale items.
-- `ev research` returns a sourced summary with URLs.
-- Drafts match your voice/style after a few examples.
-- Claude Code spawns in the correct repo with the correct task context.
-
-### Phase 3 — Structured Memory + Proactive Alerts (3–4 weeks)
-
-**Goal:** EV knows deadlines, speaks first, and tracks your working context.
-
-**Deliverables:**
-1. Structured facts tables populated from ingestion + explicit capture.
-2. Deadline watcher: `ev remember`, calendar extraction, recurring checks.
-3. Morning brief and stale-project alerts.
-4. Pre-meeting prep packets from calendar + attendee/project context.
-5. Working-set model: EV detects which repo/window you are in.
-6. One-command memory capture: `ev remember "X decided on Y because Z"`.
-
-**Acceptance criteria:**
-- EV warns about deadlines 14, 7, 3, and 1 day in advance.
-- Pre-meeting brief is ready 15 minutes before each calendar event.
-- Working-set model correctly identifies the active project 90%+ of the time.
-
-### Phase 4 — Autonomy + Evaluations (4–6 weeks)
-
-**Goal:** EV can safely execute more actions automatically and we can measure quality.
-
-**Deliverables:**
-1. Eval harness: 100–200 golden questions with known answers from your actual life and projects. ✅ Phase B seeded the harness with category-level golden cases; Phase 4 expands coverage.
-2. Voice and CLI confirmation flow for T2 actions.
-3. Automated T1 actions: CI failure → diagnosis → draft PR; stale issue → gentle nudge; test run → report delta.
-4. Error recovery and retry logic.
-5. Cost/latency dashboard per query.
-6. Self-tuning: which summaries did you ignore? Which did you act on?
-
-**Acceptance criteria:**
-- Eval suite runs on every prompt change; hallucination and refusal rates tracked.
-- T2 confirmation works by voice and CLI.
-- A simulated CI failure produces a draft fix PR within 5 minutes.
-- Cost per query is capped and visible.
-
-### Phase C — Proactive Alerts + Persistent Context (3–4 weeks)
-
-**Goal:** EV stops being purely reactive; it pushes alerts, remembers conversation threads, and surfaces what matters before it is too late.
-
-**Deliverables:**
-1. Server-initiated proactive alerts over WebSocket.
-2. Persistent chat threads stored in local SQLite.
-3. Morning brief scheduler.
-4. Optional Telegram relay via cloud relay.
+### Phase E — Local Voice + Advanced HUD + Self-Expansion (next)
+**Goal:** Full local-first voice, holographic information space, and the ability to grow its own tools.
+1. Local STT/TTS: faster-whisper + Piper/Kokoro, replacing browser Speech APIs.
+2. Model-authored HTML blades with a Python sanitizer.
+3. Packaged desktop entry point (`scripts/desktop_presence.py`).
+4. Tool-authoring loop: generate tool + test from description, human approval before activation.
+5. Move secrets out of `.env` into OS keyring / encrypted store.
+6. Structured observability: cost/latency/audit tracing.
 
 ### Phase 5+ — Advanced features (later)
-
 These are not blocked; they are sequenced after the core is reliable.
-
 1. **Voice-first boot:** "Good morning, what are we working on today?"
 2. **Predictive intervention:** move focus blocks, warn before patterns, cache fallbacks.
 3. **Cross-project creative synthesis:** "Your drone morphology problem and your portfolio rebalancing problem both involve multi-objective search…"
 4. **Consequence simulation:** "If you skip Phase 29 for the patent, here is the projected slip and risk."
-5. **Self-improvement loop:** EV tracks its own accuracy and tunes retrieval/prompts.
-6. **Phone access via Telegram:** lightweight remote queries and alerts.
-7. **Local vision:** read screenshots, diagrams, sketches from your personal machine.
+5. **Phone access via Telegram:** lightweight remote queries and alerts.
+6. **Local vision:** read screenshots, diagrams, sketches from your personal machine.
 
 ---
 
@@ -401,15 +360,18 @@ These are not blocked; they are sequenced after the core is reliable.
 
 | Layer | Technology | Rationale |
 |-------|------------|-----------|
-| Core runtime | Python 3.12+ + asyncio + FastAPI | You know Python; RoboCAD stack synergy |
-| Local DB | Postgres 16 + pgvector | Structured + vector in one database |
-| Cache / queue | Redis | Rate limits, pub/sub, job state |
-| LLM | Anthropic Claude (primary) + local Ollama (fallback/classification/embedding) | Frontier reasoning + local privacy for cheap tasks |
-| Speech | faster-whisper (STT) + Piper / Coqui TTS (TTS) | Local voice, no cloud dependency |
-| Voice activation | Porcupine / openWakeWord | Local wake word |
-| IDE bridge | Claude Code CLI spawn + socket/stream | Reuse the tool you already use |
-| Web research | DuckDuckGo / SearXNG + browser fetch | Avoid reliance on expensive X/Google APIs |
-| Cloud relay | Fly.io / Render / small VPS | Webhooks + phone fallback only |
+| Core runtime | Python 3.14+ + asyncio + FastAPI | You know Python; RoboCAD stack synergy |
+| Local DB | SQLite + sqlite-vec default; Postgres 16 + pgvector optional | Structured + vector in one database |
+| Cache / queue | Redis optional | Rate limits, pub/sub, job state |
+| LLM | NVIDIA NIM / Anthropic Claude / OpenAI (provider-agnostic) | Frontier reasoning via API; local fallback possible |
+| Embeddings | `sentence-transformers` (`all-MiniLM-L6-v2`) | Local, offline embeddings on RTX 5060 |
+| Speech (current) | Browser SpeechRecognition + speechSynthesis | MVP cross-platform voice |
+| Speech (Phase E) | faster-whisper (STT) + Piper / Kokoro (TTS) | Local voice, no cloud dependency |
+| Voice activation (current) | Browser Web Speech API continuous wake word | "hey ev" in HUD |
+| Voice activation (Phase E) | Porcupine / openWakeWord | Local wake word |
+| IDE bridge | Claude Code CLI spawn + context pipe | Reuse the tool you already use |
+| Web research | DuckDuckGo + browser fetch | Avoid reliance on expensive X/Google APIs |
+| Cloud relay | Fly.io / Render / small VPS (future) | Webhooks + phone fallback only |
 | Tray/CLI | `pynput` for hotkeys, `pystray` for tray | Cross-platform |
 
 ---
