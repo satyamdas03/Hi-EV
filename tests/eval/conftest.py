@@ -125,7 +125,9 @@ async def eval_db():
             }
         ])
 
-        # Calendar event for prep eval.
+        # Calendar event for prep eval (kept within the default 24h window).
+        event_start = datetime.now(UTC) + timedelta(hours=4)
+        event_end = event_start + timedelta(hours=1)
         await store.upsert_ingest([
             {
                 "source": "calendar_events",
@@ -134,8 +136,8 @@ async def eval_db():
                 "content": (
                     "Event: RoboCAD review\n"
                     "Description: quarterly review of RoboCAD progress\n"
-                    "Start: 2026-09-19T16:00:00+00:00\n"
-                    "End: 2026-09-19T17:00:00+00:00\n"
+                    f"Start: {event_start.isoformat()}\n"
+                    f"End: {event_end.isoformat()}\n"
                     "Attendees: 2"
                 ),
                 "project_tag": "robocad",

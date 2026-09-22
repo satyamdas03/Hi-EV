@@ -187,3 +187,34 @@ class Decision(Base):
     source_id = Column(String(512), nullable=False)
     created_at = Column(DateTime(timezone=True), default=now_utc)
     updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class ChatThread(Base):
+    """Persistent chat conversation thread."""
+
+    __tablename__ = "chat_threads"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(256), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class ChatTurn(Base):
+    """A single message within a ChatThread."""
+
+    __tablename__ = "chat_turns"
+    __table_args__ = (
+        UniqueConstraint("thread_id", "ordinal", name="uix_chat_turn_thread_ordinal"),
+    )
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    thread_id = Column(
+        Uuid(as_uuid=True), ForeignKey("chat_threads.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    ordinal = Column(Integer, nullable=False)
+    role = Column(String(32), nullable=False)
+    content = Column(Text, nullable=False)
+    tool_name = Column(String(64), nullable=True)
+    route = Column(String(32), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)

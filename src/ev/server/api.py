@@ -5,15 +5,18 @@ import logging
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from ev.config import get_settings
 from ev.db.base import SessionLocal
+from ev.db.models import ChatThread
 from ev.memory.store import MemoryStore
 from ev.server.chat import ChatSession
 from ev.server.scheduler import _ingest_loop
+from ev.server.telegram import TelegramRelay
 from ev.tools.alerts_tool import AlertsTool
 from ev.tools.brief_tool import BriefTool
 from ev.tools.calendar_prep_tool import CalendarPrepTool
@@ -44,13 +47,14 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.active_websockets: set[WebSocket] = set()
     alert_task = asyncio.create_task(_alert_loop(settings))
+    brief_task = asyncio.create_task(_brief_loop(settings))
     ingest_task = asyncio.create_task(_ingest_loop(settings))
     try:
         yield {}
     finally:
-        alert_task.cancel()
-        ingest_task.cancel()
-        for task in (alert_task, ingest_task):
+        for task in (alert_task, brief_task, ingest_task):
+            task.cancel()
+        for task in (alert_task, brief_task, ingest_task):
             try:
                 await task
             except asyncio.CancelledError:
@@ -61,7 +65,7 @@ async def lifespan(app: FastAPI):
 
 
 async def _alert_loop(settings):
-    """Background loop that emits urgent deadline digests."""
+    """Background loop that pushes urgent deadline digests to active clients."""
     from ev.tools.deadline_watcher import DeadlineWatcherTool
 
     while True:
@@ -69,26 +73,83 @@ async def _alert_loop(settings):
             await asyncio.sleep(settings.alert_interval_sec)
         except asyncio.CancelledError:
             break
-        if settings.kill_switch:
+        if not settings.proactive_alerts_enabled or settings.kill_switch:
             continue
         if _in_quiet_hours(settings.quiet_start, settings.quiet_end):
             continue
 
-        async with SessionLocal() as session:
-            store = MemoryStore(session)
-            watcher = DeadlineWatcherTool(urgent_hours=settings.alert_window_hours)
-            watcher.bind_store(store)
-            result = await watcher.run()
-            urgent = result["urgent"]
-            if not urgent:
+        try:
+            async with SessionLocal() as session:
+                store = MemoryStore(session)
+                watcher = DeadlineWatcherTool(urgent_hours=settings.alert_window_hours)
+                watcher.bind_store(store)
+                result = await watcher.run()
+                urgent = result["urgent"]
+                if not urgent:
+                    continue
+                alert_payload = {
+                    "type": "alert",
+                    "category": "deadline",
+                    "title": f"{result['counts']['urgent']} urgent deadline(s)",
+                    "body": f"Overdue: {result['counts']['overdue']}",
+                    "items": urgent,
+                }
+                for ws in list(getattr(app.state, "active_websockets", set())):
+                    with suppress(Exception):
+                        await ws.send_json(alert_payload)
+                relay = TelegramRelay()
+                asyncio.create_task(relay.alert(alert_payload["title"], alert_payload["body"], urgent))
+                for item in urgent:
+                    try:
+                        from uuid import UUID
+
+                        await store.mark_deadline_reminded(UUID(item["id"]))
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Failed to mark deadline reminded: %s", exc)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Alert loop iteration failed: %s", exc)
+
+
+async def _brief_loop(settings):
+    """Background loop that pushes a morning brief at the configured time."""
+    while True:
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            break
+        if not settings.morning_brief_enabled or settings.kill_switch:
+            continue
+        if _in_quiet_hours(settings.quiet_start, settings.quiet_end):
+            continue
+        now = datetime.now(UTC)
+        brief_time = datetime.strptime(settings.morning_brief_time, "%H:%M").time()  # noqa: DTZ007
+        # Push once within the brief minute and only once per day.
+        if now.time().hour == brief_time.hour and now.time().minute == brief_time.minute:
+            last_brief = getattr(app.state, "_last_brief_date", None)
+            if last_brief == now.date():
                 continue
-            print(f"[EV ALERT] {result['counts']['urgent']} urgent deadline(s). Overdue: {result['counts']['overdue']}")
-            for item in urgent:
-                try:
-                    from uuid import UUID
-                    await store.mark_deadline_reminded(UUID(item["id"]))
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("Failed to mark deadline reminded: %s", exc)
+            app.state._last_brief_date = now.date()
+            try:
+                async with SessionLocal() as session:
+                    store = MemoryStore(session)
+                    registry = ToolRegistry(store)
+                    registry.register(BriefTool())
+                    brief_text = await registry.get("brief").run()
+                brief_payload = {
+                    "type": "alert",
+                    "category": "morning_brief",
+                    "title": "Morning brief",
+                    "body": brief_text,
+                }
+                for ws in list(getattr(app.state, "active_websockets", set())):
+                    with suppress(Exception):
+                        await ws.send_json(brief_payload)
+                relay = TelegramRelay()
+                asyncio.create_task(relay.morning_brief(brief_text))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Morning brief iteration failed: %s", exc)
 
 
 def _in_quiet_hours(start: str, end: str) -> bool:
@@ -330,11 +391,13 @@ async def websocket_endpoint(websocket: WebSocket):
     """Bi-directional conversation socket for the Hi-EV web client.
 
     Accepts transcript messages from the browser and streams back response deltas.
-    Each connection gets its own ChatSession so conversation history is isolated.
+    A connection may optionally resume a thread via `?thread_id=...`; otherwise a
+    new thread is created lazily on the first transcript.
     """
     await websocket.accept()
     app.state.active_websockets.add(websocket)
-    session = ChatSession(websocket)
+    thread_id = websocket.query_params.get("thread_id")
+    session = ChatSession(websocket, thread_id=thread_id)
     try:
         while True:
             data = await websocket.receive_json()
@@ -347,3 +410,87 @@ async def websocket_endpoint(websocket: WebSocket):
         app.state.active_websockets.discard(websocket)
         with suppress(Exception):
             await websocket.close()
+
+
+class ThreadCreateRequest(BaseModel):
+    title: str | None = None
+
+
+class ThreadRenameRequest(BaseModel):
+    title: str
+
+
+@app.post("/threads")
+async def create_thread(req: ThreadCreateRequest):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        thread = await store.create_chat_thread(title=req.title)
+        return {"id": str(thread.id), "title": thread.title, "created_at": thread.created_at.isoformat()}
+
+
+@app.get("/threads")
+async def list_threads(limit: int = 50):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        threads = await store.list_chat_threads(limit=limit)
+        return [
+            {
+                "id": str(t.id),
+                "title": t.title,
+                "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+            }
+            for t in threads
+        ]
+
+
+@app.get("/threads/{thread_id}")
+async def get_thread(thread_id: str):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        thread = await store.get_chat_thread(thread_id)
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        turns = await store.list_chat_turns(thread_id)
+        return {
+            "id": str(thread.id),
+            "title": thread.title,
+            "created_at": thread.created_at.isoformat() if thread.created_at else None,
+            "updated_at": thread.updated_at.isoformat() if thread.updated_at else None,
+            "turns": [
+                {
+                    "id": str(turn.id),
+                    "ordinal": turn.ordinal,
+                    "role": turn.role,
+                    "content": turn.content,
+                    "tool_name": turn.tool_name,
+                    "route": turn.route,
+                    "created_at": turn.created_at.isoformat() if turn.created_at else None,
+                }
+                for turn in turns
+            ],
+        }
+
+
+@app.patch("/threads/{thread_id}")
+async def rename_thread(thread_id: str, req: ThreadRenameRequest):
+    from uuid import UUID
+
+    async with SessionLocal() as session:
+        result = await session.execute(select(ChatThread).where(ChatThread.id == UUID(thread_id)))
+        thread = result.scalar_one_or_none()
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        thread.title = req.title
+        session.add(thread)
+        await session.commit()
+    return {"id": thread_id, "title": req.title}
+
+
+@app.delete("/threads/{thread_id}")
+async def delete_thread(thread_id: str):
+    async with SessionLocal() as session:
+        store = MemoryStore(session)
+        deleted = await store.delete_chat_thread(thread_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Thread not found")
+    return {"deleted": True}

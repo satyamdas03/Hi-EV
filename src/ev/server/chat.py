@@ -55,22 +55,64 @@ _INTENT_ALIASES = {
 class ChatSession:
     """One WebSocket connection's worth of state and dispatch logic."""
 
-    def __init__(self, websocket):
+    def __init__(self, websocket, thread_id: str | None = None):
         self.websocket = websocket
         self.client = LLMClient()
         self.guard = Guard()
         self.settings = get_settings()
         self.history: list[dict[str, str]] = []
         self._stop_event = asyncio.Event()
+        self.thread_id: str | None = None
+        self._pending_thread_id = thread_id
         self.system_prompt = (
             "You are EV, a local-first personal AI operating system. You are helpful, concise, "
             "and you only act on the user's personal projects and data. You refuse requests "
             "that touch work accounts, employer data, or any patent/IP-sensitive material."
         )
 
+    async def _ensure_thread(self) -> str:
+        """Resolve or create the persistent chat thread."""
+        if self.thread_id:
+            return self.thread_id
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            if self._pending_thread_id:
+                thread = await store.get_chat_thread(self._pending_thread_id)
+                if thread:
+                    self.thread_id = str(thread.id)
+                else:
+                    thread = await store.create_chat_thread(title=None)
+                    self.thread_id = str(thread.id)
+            else:
+                thread = await store.create_chat_thread(title=None)
+                self.thread_id = str(thread.id)
+        return self.thread_id
+
+    async def _load_history(self) -> None:
+        """Load recent turns from the database into the in-memory history."""
+        if not self.thread_id:
+            return
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            turns = await store.list_chat_turns(self.thread_id, limit=20)
+        self.history = [
+            {"role": turn.role, "content": turn.content}
+            for turn in turns
+            if turn.role in ("user", "assistant")
+        ]
+
+    async def _persist_turn(self, role: str, content: str, tool_name: str | None = None, route: str | None = None) -> None:
+        """Persist a single chat turn to the database."""
+        thread_id = await self._ensure_thread()
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            await store.add_chat_turn(thread_id, role=role, content=content, tool_name=tool_name, route=route)
+
     async def handle_message(self, data: dict[str, Any]) -> None:
         msg_type = data.get("type")
         if msg_type == "transcript":
+            await self._ensure_thread()
+            await self._load_history()
             await self._on_transcript(data.get("text", ""))
         elif msg_type == "stop":
             await self._on_stop()
@@ -99,10 +141,12 @@ class ChatSession:
             await self._send_json({"type": "done"})
             return
 
+        await self._persist_turn("user", text)
         self.history.append({"role": "user", "content": text})
         await self._send_json({"type": "phase", "phase": "thinking"})
 
         route = None
+        route_value: str | None = None
         if self.settings.enable_reasoning_router:
             route = route_request(
                 text,
@@ -112,13 +156,14 @@ class ChatSession:
                     history_turns=len(self.history) // 2,
                 ),
             )
-            await self._send_json({"type": "phase", "phase": f"route:{route.path.value}"})
+            route_value = route.path.value
+            await self._send_json({"type": "phase", "phase": f"route:{route_value}"})
 
         raw_intent, args = await self._classify_intent(text)
         intent = _INTENT_ALIASES.get(raw_intent, raw_intent)
 
         if intent == "chat" and self._should_stream(route):
-            await self._stream_chat(text)
+            await self._stream_chat(text, route=route_value)
             return
 
         try:
@@ -127,6 +172,7 @@ class ChatSession:
             logger.warning("Chat resolution failed: %s", exc)
             response = f"EV had a problem handling that: {exc}"
 
+        await self._persist_turn("assistant", response, tool_name=intent if intent != "chat" else None, route=route_value)
         self.history.append({"role": "assistant", "content": response})
         # Keep history bounded.
         if len(self.history) > 20:
@@ -145,7 +191,7 @@ class ChatSession:
             return False
         return route.path == Route.FAST
 
-    async def _stream_chat(self, text: str) -> None:
+    async def _stream_chat(self, text: str, route: str | None = None) -> None:
         """Stream a chat answer word-by-word over the WebSocket."""
         messages = [
             {"role": "system", "content": self.system_prompt},
@@ -168,6 +214,7 @@ class ChatSession:
 
         response = "".join(pieces)
         if response:
+            await self._persist_turn("assistant", response, route=route)
             self.history.append({"role": "assistant", "content": response})
             # Keep history bounded.
             if len(self.history) > 20:

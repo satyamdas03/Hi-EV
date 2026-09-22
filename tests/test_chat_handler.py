@@ -5,7 +5,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from ev.db.base import Base, engine
 from ev.security.guard import GuardDecision, GuardStatus
+
+
+@pytest.fixture(autouse=True)
+async def chat_tables():
+    """Create all tables before each chat test and drop them after."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
 
 @pytest.fixture
@@ -77,9 +88,9 @@ async def test_chat_runs_tier_one_action(mock_llm_client, mock_ws):
 
     calls = [c.args[0] for c in mock_ws.send_json.await_args_list]
     delta = next(c for c in calls if c.get("type") == "delta")
-    # Tier-1 work_on auto-executes in the MVP web UI. It tries to spawn Claude Code,
-    # which fails in tests, so we expect an error message rather than a confirmation prompt.
-    assert "EV couldn't run" in delta["text"] or "Claude Code" in delta["text"]
+    # Tier-1 work_on auto-executes in the MVP web UI. In tests it fails because the
+    # project is not seeded, so we expect an execution error rather than a confirmation prompt.
+    assert "EV couldn't run" in delta["text"] or "Claude Code" in delta["text"] or "Project not found" in delta["text"]
     assert calls[-1] == {"type": "done"}
 
 
@@ -256,7 +267,7 @@ async def test_chat_stop_cancels_stream(mock_llm_client, mock_ws):
     session.settings = Settings(enable_reasoning_router=True, llm_stream_enabled=True)
 
     task = asyncio.create_task(session.handle_message({"type": "transcript", "text": "hello"}))
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(0.08)
     await session.handle_message({"type": "stop"})
     await task
 

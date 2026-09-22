@@ -67,6 +67,14 @@ class Settings(BaseSettings):
     enable_reasoning_router: bool = Field(default=False)
     llm_stream_enabled: bool = Field(default=True)
 
+    # Phase C — Proactive alerts, morning brief, and optional Telegram relay.
+    proactive_alerts_enabled: bool = Field(default=True)
+    morning_brief_enabled: bool = Field(default=True)
+    morning_brief_time: str = Field(default="08:00")
+    telegram_enabled: bool = Field(default=False)
+    telegram_bot_token: SecretStr | None = None
+    telegram_chat_id: str | None = None
+
     # Guard model / prompt-injection classifier settings.
     guard_llm_enabled: bool = Field(default=True)
     guard_caution_threshold: float = Field(default=0.6)

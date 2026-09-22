@@ -537,7 +537,9 @@ The local daemon scaffold, personal-only security boundary with a config-driven 
 
 **Phase A — Ambient Ingestion + Semantic Memory implemented.** Document chunking, local `all-MiniLM-L6-v2` embeddings, sqlite-vec hybrid search, the `ev remember` command, memory/remember API + WebSocket intents, and a background daemon ingestion scheduler are complete and pushed. `StatusTool`, `PrepTool`, and `ResearchTool` ground their answers in document memory.
 
-**Phase B — Reasoning Router + Eval Harness + Streaming UI implemented.** The reasoning router, source-trust propagation, guard model, streaming LLM fast path, backend stop/abort control, eval harness, and extraordinary frontend streaming UI are complete and pushed to `origin/main`. Full test suite: **181 passed, 1 skipped**. The next phase is **Phase C — Proactive Alerts + Persistent Context**.
+**Phase B — Reasoning Router + Eval Harness + Streaming UI implemented.** The reasoning router, source-trust propagation, guard model, streaming LLM fast path, backend stop/abort control, eval harness, and extraordinary frontend streaming UI are complete and pushed.
+
+**Phase C — Proactive Alerts + Persistent Context implemented.** Persistent chat threads and turns, thread-aware WebSocket sessions, REST thread CRUD, proactive WebSocket deadline alerts, morning brief scheduler, optional Telegram relay skeleton, and frontend alerts/threads panels are complete and pushed to `origin/main`. Full test suite: **190 passed, 1 skipped**. The next phase is **Phase D — External Connectivity + Automations**.
 
 ---
 

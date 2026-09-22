@@ -17,9 +17,19 @@ export type Turn = {
   text: string
 }
 
+export type Alert = {
+  id: string
+  category: string
+  title: string
+  body: string
+  items?: unknown[]
+  receivedAt: number
+}
+
 export interface EvState {
   phase: Phase
   turns: Turn[]
+  alerts: Alert[]
   caption: string | null
   level: number
   connected: boolean
@@ -32,6 +42,8 @@ export interface EvState {
   setPhase: (phase: Phase) => void
   addUserTurn: (text: string) => void
   addEvDelta: (text: string) => void
+  addAlert: (alert: Omit<Alert, 'id' | 'receivedAt'>) => void
+  dismissAlert: (id: string) => void
   setCaption: (caption: string | null) => void
   setLevel: (level: number) => void
   setConnected: (connected: boolean) => void
@@ -48,6 +60,7 @@ let idCounter = 0
 export const useStore = create<EvState>((set) => ({
   phase: 'offline',
   turns: [],
+  alerts: [],
   caption: null,
   level: 0,
   connected: false,
@@ -89,6 +102,19 @@ export const useStore = create<EvState>((set) => ({
         ],
       }
     }),
+
+  addAlert: (alert) =>
+    set((s) => ({
+      alerts: [
+        { ...alert, id: String(++idCounter), receivedAt: Date.now() },
+        ...s.alerts,
+      ],
+    })),
+
+  dismissAlert: (id) =>
+    set((s) => ({
+      alerts: s.alerts.filter((a) => a.id !== id),
+    })),
 
   setCaption: (caption) => set({ caption }),
   setLevel: (level) => set({ level }),

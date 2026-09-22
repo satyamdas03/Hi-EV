@@ -1,19 +1,21 @@
 """Shared pytest fixtures for the Hi-EV test suite."""
 
 import os
+import tempfile
 from contextlib import suppress
+from pathlib import Path
 
 import pytest
 
 
 def pytest_configure(config):
-    """Force tests to use an isolated SQLite database.
+    """Force tests to use a shared file-based SQLite database.
 
-    This runs before test collection so that any module importing
-    `ev.db.base` sees the test URL. The engine/session caches are cleared
-    so a previously imported engine is rebound to SQLite.
+    A file DB lets async REST endpoint tests and direct store tests see the
+    same data, while the engine is created once per session and reused.
     """
-    os.environ["EV_DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+    db_path = Path(tempfile.gettempdir()) / f"hiev_test_{os.getpid()}.db"
+    os.environ["EV_DATABASE_URL"] = f"sqlite+aiosqlite:///{db_path}"
     # ev.db.base may have been imported by pytest plugins; clear the cached
     # engine/session maker so the test URL wins.
     with suppress(Exception):
@@ -28,13 +30,16 @@ def pytest_configure(config):
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """Dispose the shared async engine so pytest exits promptly."""
+    """Dispose the shared async engine and remove the temp database."""
     with suppress(Exception):
         import asyncio
 
         from ev.db.base import engine
 
         asyncio.run(engine.dispose())
+    db_path = Path(tempfile.gettempdir()) / f"hiev_test_{os.getpid()}.db"
+    with suppress(Exception):
+        db_path.unlink(missing_ok=True)
 
 
 @pytest.fixture

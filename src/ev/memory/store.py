@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import desc, func, or_, select, tuple_
 
 from ev.db.models import (
+    ChatThread,
+    ChatTurn,
     Deadline,
     Decision,
     DocumentChunk,
@@ -620,3 +622,87 @@ class MemoryStore:
 
         await self.session.commit()
         return len(rows)
+
+    # ------------------------------------------------------------------
+    # Persistent chat threads
+    # ------------------------------------------------------------------
+
+    async def create_chat_thread(self, title: str | None = None) -> ChatThread:
+        thread = ChatThread(title=title)
+        self.session.add(thread)
+        await self.session.commit()
+        return thread
+
+    async def get_chat_thread(self, thread_id) -> ChatThread | None:
+        from uuid import UUID
+
+        if isinstance(thread_id, str):
+            thread_id = UUID(thread_id)
+        result = await self.session.execute(select(ChatThread).where(ChatThread.id == thread_id))
+        return result.scalar_one_or_none()
+
+    async def list_chat_threads(self, limit: int = 50) -> list[ChatThread]:
+        result = await self.session.execute(
+            select(ChatThread).order_by(desc(ChatThread.updated_at)).limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def list_chat_turns(self, thread_id, limit: int = 100) -> list[ChatTurn]:
+        from uuid import UUID
+
+        if isinstance(thread_id, str):
+            thread_id = UUID(thread_id)
+        result = await self.session.execute(
+            select(ChatTurn)
+            .where(ChatTurn.thread_id == thread_id)
+            .order_by(ChatTurn.ordinal)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def add_chat_turn(
+        self,
+        thread_id,
+        role: str,
+        content: str,
+        tool_name: str | None = None,
+        route: str | None = None,
+    ) -> ChatTurn:
+        from uuid import UUID
+
+        if isinstance(thread_id, str):
+            thread_id = UUID(thread_id)
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(ChatTurn)
+            .where(ChatTurn.thread_id == thread_id)
+        )
+        ordinal = result.scalar_one() or 0
+        turn = ChatTurn(
+            thread_id=thread_id,
+            ordinal=ordinal,
+            role=role,
+            content=content,
+            tool_name=tool_name,
+            route=route,
+        )
+        self.session.add(turn)
+        # Touch the parent thread's updated_at timestamp.
+        thread = await self.get_chat_thread(thread_id)
+        if thread:
+            thread.updated_at = datetime.now(UTC)
+            self.session.add(thread)
+        await self.session.commit()
+        return turn
+
+    async def delete_chat_thread(self, thread_id) -> bool:
+        from uuid import UUID
+
+        if isinstance(thread_id, str):
+            thread_id = UUID(thread_id)
+        thread = await self.get_chat_thread(thread_id)
+        if not thread:
+            return False
+        await self.session.delete(thread)
+        await self.session.commit()
+        return True

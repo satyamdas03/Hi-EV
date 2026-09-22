@@ -1,5 +1,7 @@
 import { useStore, type Phase } from '../store'
+import { Alerts } from './Alerts'
 import { Chat } from './Chat'
+import { Threads } from './Threads'
 import type { EvBridge } from '../lib/bridge'
 
 const statusText: Record<Phase, string> = {
@@ -48,6 +50,10 @@ export function Hud({ bridge }: { bridge: EvBridge }) {
           <span className="tool-name">{activeTool}</span>
         </div>
       )}
+
+      <Alerts />
+
+      <Threads bridge={bridge} />
 
       <Chat bridge={bridge} />
 
