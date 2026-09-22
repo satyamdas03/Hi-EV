@@ -18,6 +18,9 @@ async def proactive_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
+    # Dispose pooled connections before dropping tables so teardown does not
+    # race with any async task that still holds a connection from this engine.
+    await engine.dispose()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
