@@ -7,7 +7,7 @@ from typing import Any
 from ev.core import register
 from ev.sandbox.runner import CodeRunner
 
-from ev.tools.registry import Tool
+from .registry import Tool
 
 
 @register("tool", "sandbox")

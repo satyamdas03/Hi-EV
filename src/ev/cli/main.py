@@ -458,3 +458,27 @@ def list_skills(json_output: bool):
         for name in sorted(discovered):
             m = discovered[name]
             click.echo(f"  - {name} (v{m.version}): {m.description}")
+
+
+@cli.group()
+def eval():
+    """Run eval suites against the live tool registry."""
+
+
+@eval.command("run")
+@click.argument("suite_dir", default="evals")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON report")
+def run_eval(suite_dir: str, json_output: bool):
+    """Run eval cases from SUITE_DIR (default: evals)."""
+    from ev.eval.runner import EvalRunner
+    from ev.eval.reporter import json_report, text_report
+
+    async def _run():
+        runner = EvalRunner(suite_dirs=[suite_dir])
+        results = await runner.run()
+        if json_output:
+            click.echo(json_report(results))
+        else:
+            click.echo(text_report(results))
+
+    asyncio.run(_run())

@@ -58,7 +58,11 @@ async def test_alert_loop_pushes_to_websockets(quiet_settings):
     ws.send_json = AsyncMock()
     app_state = type("State", (), {"active_websockets": {ws}, "_last_brief_date": None})()
 
-    with patch("ev.server.api.app") as mock_app:
+    mock_relay = MagicMock()
+    mock_relay.alert = AsyncMock()
+    mock_relay.morning_brief = AsyncMock()
+
+    with patch("ev.server.api.app") as mock_app, patch("ev.server.api.TelegramRelay", return_value=mock_relay):
         mock_app.state = app_state
         # Run one iteration by cancelling after a short delay.
         task = asyncio.create_task(_alert_loop(quiet_settings))

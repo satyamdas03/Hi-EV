@@ -6,7 +6,7 @@ import pytest
 
 from ev.sandbox.policy import SandboxError, SandboxPolicy
 from ev.sandbox.runner import CodeRunner
-from ev.sandbox.tool import SandboxTool
+from ev.tools.sandbox_tool import SandboxTool
 
 
 def test_policy_allows_simple_math():
