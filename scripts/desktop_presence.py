@@ -17,7 +17,6 @@ import sys
 import threading
 import time
 import webbrowser
-from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
 
