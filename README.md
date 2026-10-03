@@ -7,9 +7,10 @@ EV is not a chatbot. It is the persistent operating system for a single human �
 ## Current status
 
 - **Phases A–D are complete and pushed to `origin/main`.**
-- **Tests:** 197 passed, 1 skipped; **ruff:** clean; **frontend build:** clean.
+- **Phase E Launch MVP is complete:** local Windows installer, first-run setup wizard, packaged desktop entry point, and graceful missing-LLM-key fallback.
+- **Tests:** 203 passed, 1 skipped; **ruff:** clean; **frontend build:** clean.
 - **Live smoke test:** Phase D confirmation flow verified end-to-end against the running daemon on `127.0.0.1:7345`.
-- **Phase E** (local STT/TTS, HTML blades, tool self-authoring, packaged desktop presence) is next.
+- **Phase E v1.1** (local STT/TTS, HTML blades, tool self-authoring, OS keyring, auto-updater) is next.
 
 ---
 
@@ -336,14 +337,22 @@ Instantly:
 - Desktop presence skeleton: global hotkey (`Ctrl+Alt+E`), system-tray widget, browser wake word ("hey ev"), `POST /focus`.
 - Live end-to-end smoke test passed against the running daemon.
 
-### Phase E — Local Voice + Advanced HUD + Self-Expansion (next)
+### Phase E Launch MVP — Local Installer + Setup Wizard ✅ COMPLETE
+**Goal:** A non-technical user can download Hi-EV on Windows, run it, and complete first-run setup without editing `.env`.
+1. Unified desktop entry point: `scripts/desktop_presence.py` launches daemon + tray + hotkey + HUD.
+2. In-HUD first-run setup wizard: `GET /setup`, `POST /setup`, `web/src/ui/SetupWizard.tsx`.
+3. Per-user `.env` in `%LOCALAPPDATA%\Hi-EV\.env`, managed by the wizard.
+4. PyInstaller build script: `scripts/build_installer.py` produces `dist/Hi-EV/` and a portable executable.
+5. Graceful missing-LLM-key fallback in chat and diagnostics.
+
+### Phase E v1.1 — Local Voice + Advanced HUD + Self-Expansion (next)
 **Goal:** Full local-first voice, holographic information space, and the ability to grow its own tools.
 1. Local STT/TTS: faster-whisper + Piper/Kokoro, replacing browser Speech APIs.
 2. Model-authored HTML blades with a Python sanitizer.
-3. Packaged desktop entry point (`scripts/desktop_presence.py`).
-4. Tool-authoring loop: generate tool + test from description, human approval before activation.
-5. Move secrets out of `.env` into OS keyring / encrypted store.
-6. Structured observability: cost/latency/audit tracing.
+3. Tool-authoring loop: generate tool + test from description, human approval before activation.
+4. Move secrets out of `.env` into OS keyring / encrypted store.
+5. Structured observability: cost/latency/audit tracing.
+6. macOS / Linux installers and auto-updater.
 
 ### Phase 5+ — Advanced features (later)
 These are not blocked; they are sequenced after the core is reliable.
@@ -420,61 +429,63 @@ These are not blocked; they are sequenced after the core is reliable.
 
 ---
 
-## Setup (Phase 1)
+## Setup
 
-Hi-EV now defaults to **SQLite + sqlite-vec** so it runs without a system Postgres install. Postgres + pgvector remains an optional, fully supported upgrade path.
+### Windows installer / launch MVP
+
+1. Download `Hi-EV.exe` (portable) or run the installer.
+2. Double-click `Hi-EV.exe`. It starts the daemon and opens your default browser to `http://127.0.0.1:7345`.
+3. On first run the HUD shows a setup wizard. Fill in:
+   - **Notes path** — where your personal markdown notes live.
+   - **LLM provider + API key** — NVIDIA, Anthropic, or OpenAI (at least one key is required for chat).
+   - **GitHub token** — optional, for personal repo ingestion.
+   - **Blocked handles / domains** — work or other handles/domains EV must never touch.
+   - **Quiet hours** — when EV should not send proactive alerts.
+4. Click **Save**. The wizard writes `%LOCALAPPDATA%\Hi-EV\.env` and reloads the page.
+5. Use the HUD by voice (mic / wake word / spacebar) or type commands such as *"status RoboCAD"*.
+
+### Developer setup
+
+Hi-EV defaults to **SQLite + sqlite-vec** so it runs without a system Postgres install. Postgres + pgvector remains an optional, fully supported upgrade path.
 
 1. Install Python 3.12+.
-2. Copy `.env.example` to `.env` and fill in at least:
-   - `EV_NOTES_PATH`
-   - `EV_GITHUB_TOKEN` (for live GitHub ingestion)
-   - `EV_BLOCKED_HANDLES` and `EV_BLOCKED_DOMAINS` (JSON arrays of work handles/domains to block)
-   - `EV_EMBEDDING_MODEL` (defaults to `all-MiniLM-L6-v2`)
-   - `EV_DATABASE_URL` is optional; if omitted it defaults to a local SQLite file in `~/.hiev/hiev.db`.
-3. Install the project:
+2. Install the project:
    ```bash
-   pip install -e ".[dev]"
+   pip install -e ".[dev,desktop]"
    ```
-4. Set up the local SQLite database with sqlite-vec:
-   ```bash
-   python scripts/setup_sqlite_vec.py
-   ```
-   This applies Alembic migrations and creates the sqlite-vec virtual table.
-5. Verify the local embedding model and vector search:
-   ```bash
-   python scripts/check_embeddings.py
-   python scripts/smoke_vector_search.py
-   ```
-6. Run tests:
+3. Run tests:
    ```bash
    pytest
    ```
-   Tests use an isolated in-memory SQLite database automatically.
-7. Seed your local memory (optional, needs `EV_GITHUB_TOKEN`):
-   ```bash
-   python scripts/seed_demo.py
-   ```
-8. Run the daemon:
-   ```bash
-   python -m evd
-   # or
-   uvicorn ev.server.api:app --host 127.0.0.1 --port 7345
-   ```
-9. Open the voice/HUD web client:
+4. Build the HUD:
    ```bash
    cd web
    npm install
-   npm run dev
+   npm run build
    ```
-   Then visit `http://localhost:5173` and speak or type a command such as *"status RoboCAD"*.
-10. Query status from the CLI or API:
-    ```bash
-    ev status RoboCAD
-    ```
-    Or via the API:
-    ```bash
-    curl -X POST http://127.0.0.1:7345/status -H "Content-Type: application/json" -d '{"project":"RoboCAD"}'
-    ```
+5. Start the desktop entry point:
+   ```bash
+   python scripts/desktop_presence.py
+   ```
+   Or start just the daemon:
+   ```bash
+   uvicorn ev.server.api:app --host 127.0.0.1 --port 7345
+   cd web && npm run dev
+   ```
+6. To build the Windows executable:
+   ```bash
+   python scripts/build_installer.py
+   ```
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| HUD shows "setup needed" on every launch | The wizard writes `%LOCALAPPDATA%\Hi-EV\.env`. Make sure you clicked **Save** and that the daemon process has write access to that folder. |
+| EV responds but says no LLM key is configured | Open **Diagnostics** (press `D` in the HUD) and check **llm key**. Re-run the wizard or set the matching `EV_*_API_KEY` in `%LOCALAPPDATA%\Hi-EV\.env`. |
+| Browser does not open automatically | Press `Ctrl+Alt+E` (global hotkey) or right-click the Hi-EV tray icon and choose **Open HUD**. |
+| Daemon not reachable on `127.0.0.1:7345` | Make sure no other process is using port 7345, or set `EV_BASE_URL` to a different port. |
+| Speech recognition is unavailable | The MVP uses the browser's built-in Web Speech API. Chrome/Edge on Windows work best. Local STT/TTS is on the v1.1 roadmap. |
 
 ### Optional: Postgres + pgvector
 
@@ -501,7 +512,11 @@ The local daemon scaffold, personal-only security boundary with a config-driven 
 
 **Phase B — Reasoning Router + Eval Harness + Streaming UI implemented.** The reasoning router, source-trust propagation, guard model, streaming LLM fast path, backend stop/abort control, eval harness, and extraordinary frontend streaming UI are complete and pushed.
 
-**Phase C — Proactive Alerts + Persistent Context implemented.** Persistent chat threads and turns, thread-aware WebSocket sessions, REST thread CRUD, proactive WebSocket deadline alerts, morning brief scheduler, optional Telegram relay skeleton, and frontend alerts/threads panels are complete and pushed to `origin/main`. Full test suite: **190 passed, 1 skipped**. The next phase is **Phase D — External Connectivity + Automations**.
+**Phase C — Proactive Alerts + Persistent Context implemented.** Persistent chat threads and turns, thread-aware WebSocket sessions, REST thread CRUD, proactive WebSocket deadline alerts, morning brief scheduler, optional Telegram relay skeleton, and frontend alerts/threads panels are complete and pushed to `origin/main`.
+
+**Phase D — Safe Autonomy + Desktop Presence implemented.** T2/T3 confirmation flow, global hotkey, tray widget, wake word, and `POST /focus` are complete and pushed.
+
+**Phase E Launch MVP — Local Installer + Setup Wizard implemented.** Unified desktop entry point, first-run setup wizard, PyInstaller build script, and graceful missing-LLM-key fallback are complete and pushed to `origin/main`. Full test suite: **203 passed, 1 skipped**. The next phase is **Phase E v1.1 — Local Voice + Advanced HUD + Self-Expansion**.
 
 ---
 

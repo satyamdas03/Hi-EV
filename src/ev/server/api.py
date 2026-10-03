@@ -2,11 +2,14 @@
 
 import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -16,6 +19,12 @@ from ev.db.models import ChatThread
 from ev.memory.store import MemoryStore
 from ev.server.chat import ChatSession
 from ev.server.scheduler import _ingest_loop
+from ev.server.setup import (
+    SetupRequest,
+    apply_setup,
+    check_setup_status,
+    get_setup_defaults,
+)
 from ev.server.telegram import TelegramRelay
 from ev.tools.alerts_tool import AlertsTool
 from ev.tools.brief_tool import BriefTool
@@ -381,9 +390,46 @@ async def remember_endpoint(req: RememberRequest):
         return result
 
 
+class SetupResponse(BaseModel):
+    needs_setup: bool
+    env_exists: bool
+    env_path: str
+    missing: list[str]
+    message: str
+    defaults: dict
+
+
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    settings = get_settings()
+    return {"status": "ok", "llm_ready": settings.llm_ready()}
+
+
+@app.get("/setup", response_model=SetupResponse)
+async def setup_status():
+    """Return first-run setup status and defaults for the HUD wizard."""
+    status = check_setup_status()
+    return SetupResponse(
+        needs_setup=status.needs_setup,
+        env_exists=status.env_exists,
+        env_path=str(status.env_path),
+        missing=status.missing,
+        message=status.message,
+        defaults=get_setup_defaults(),
+    )
+
+
+@app.post("/setup")
+async def setup_apply(req: SetupRequest):
+    """Persist setup configuration from the HUD wizard.
+
+    The caller must restart the daemon afterwards so the new `.env` is loaded.
+    """
+    try:
+        result = apply_setup(req)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.websocket("/ws")
@@ -504,3 +550,26 @@ async def delete_thread(thread_id: str):
         if not deleted:
             raise HTTPException(status_code=404, detail="Thread not found")
     return {"deleted": True}
+
+
+def _find_static_root() -> Path | None:
+    """Locate the bundled web assets (web/dist) for the HUD.
+
+    In a PyInstaller bundle the files live under sys._MEIPASS. In a normal
+    checkout they are three levels above this module.
+    """
+    candidates = []
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        candidates.append(Path(sys._MEIPASS) / "web" / "dist")
+    else:
+        module_dir = Path(__file__).resolve().parent
+        candidates.append(module_dir.parent.parent.parent / "web" / "dist")
+    for path in candidates:
+        if path.is_dir():
+            return path
+    return None
+
+
+_STATIC_ROOT = _find_static_root()
+if _STATIC_ROOT is not None:
+    app.mount("/", StaticFiles(directory=_STATIC_ROOT, html=True), name="static")

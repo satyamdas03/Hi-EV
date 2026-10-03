@@ -46,3 +46,28 @@ def test_phase_b_feature_flags_from_env(monkeypatch):
     assert settings.guard_caution_threshold == 0.8
     assert settings.guard_block_patterns == ["ignore previous", "system override"]
     assert settings.guard_untrusted_downgrade_tier == 0
+
+
+def test_llm_ready_per_provider():
+    from ev.config import Settings
+
+    base = {
+        "llm_provider": "nvidia",
+        "nvidia_api_key": None,
+        "openai_api_key": None,
+        "anthropic_api_key": None,
+    }
+    settings = Settings(**base)
+    assert settings.llm_ready() is False
+
+    settings = Settings(**{**base, "llm_provider": "anthropic", "anthropic_api_key": "sk-ant-test"})
+    assert settings.llm_provider == "anthropic"
+    assert settings.llm_ready() is True
+
+    settings = Settings(**{**base, "llm_provider": "openai", "openai_api_key": "sk-openai-test"})
+    assert settings.llm_provider == "openai"
+    assert settings.llm_ready() is True
+
+    settings = Settings(**{**base, "llm_provider": "nvidia", "nvidia_api_key": "nvapi-test"})
+    assert settings.llm_provider == "nvidia"
+    assert settings.llm_ready() is True

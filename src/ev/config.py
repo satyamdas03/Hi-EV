@@ -1,5 +1,7 @@
 """Hi-EV settings loader."""
 
+import os
+import platform
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
@@ -13,15 +15,29 @@ def _split_csv(value: str | None) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _default_app_data_dir() -> Path:
+    """Return the per-user directory where EV stores config, DB, and logs."""
+    system = platform.system()
+    if system == "Windows":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    elif system == "Darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return base / "Hi-EV"
+
+
 def _default_database_url() -> str:
-    """Default to a local SQLite file so EV runs without a system Postgres install."""
-    return f"sqlite+aiosqlite:///{Path.home() / '.hiev' / 'hiev.db'}"
+    """Default to a local SQLite file in the EV app data directory."""
+    db_dir = _default_app_data_dir()
+    db_dir.mkdir(parents=True, exist_ok=True)
+    return f"sqlite+aiosqlite:///{db_dir / 'hiev.db'}"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="EV_",
-        env_file=".env",
+        env_file=(str(_default_app_data_dir() / ".env"), ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -83,6 +99,12 @@ class Settings(BaseSettings):
     wake_word_enabled: bool = Field(default=False)
     wake_word_phrase: str = Field(default="hey ev")
 
+    # Phase E Launch MVP — installer and setup wizard.
+    app_data_dir: Path = Field(default_factory=_default_app_data_dir)
+    env_file_path: Path | None = None
+    desktop_auto_open_hud: bool = Field(default=True)
+    setup_wizard_enabled: bool = Field(default=True)
+
     # Guard model / prompt-injection classifier settings.
     guard_llm_enabled: bool = Field(default=True)
     guard_caution_threshold: float = Field(default=0.6)
@@ -95,6 +117,17 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return _split_csv(value)
         return value or []
+
+    def llm_ready(self) -> bool:
+        """Return True when the configured LLM provider has an API key."""
+        provider = (self.llm_provider or "nvidia").lower()
+        if provider == "nvidia":
+            return self.nvidia_api_key is not None
+        if provider == "openai":
+            return self.openai_api_key is not None
+        if provider == "anthropic":
+            return self.anthropic_api_key is not None
+        return False
 
 
 @lru_cache

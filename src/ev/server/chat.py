@@ -168,6 +168,18 @@ class ChatSession:
             await self._send_json({"type": "done"})
             return
 
+        if not self.settings.llm_ready():
+            reply = (
+                "EV is installed, but no LLM API key is configured. "
+                "Open the setup wizard to add your NVIDIA, Anthropic, or OpenAI key, then try again."
+            )
+            await self._persist_turn("assistant", reply, route=None)
+            self.history.append({"role": "assistant", "content": reply})
+            await self._send_json({"type": "phase", "phase": "error"})
+            await self._send_json({"type": "delta", "text": reply})
+            await self._send_json({"type": "done"})
+            return
+
         await self._persist_turn("user", text)
         self.history.append({"role": "user", "content": text})
         await self._send_json({"type": "phase", "phase": "thinking"})

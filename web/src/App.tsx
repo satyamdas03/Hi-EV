@@ -3,11 +3,13 @@ import { EvBridge } from './lib/bridge'
 import { getMicLevel } from './lib/audio'
 import { startListening, stopListening, handleBridgeEvent, startWakeListening, stopWakeListening } from './lib/voice'
 import { useStore } from './store'
+import { EV_API_URL } from './config'
 import { Scene } from './scene/Scene'
 import { Boot } from './ui/Boot'
 import { Diagnostics } from './ui/Diagnostics'
 import { Hud } from './ui/Hud'
 import { Ignition } from './ui/Ignition'
+import { SetupWizard } from './ui/SetupWizard'
 import { Suggestions } from './ui/Suggestions'
 
 export function App() {
@@ -19,6 +21,8 @@ export function App() {
   const setError = useStore((s) => s.setError)
   const focusRequested = useStore((s) => s.focusRequested)
   const clearFocusRequest = useStore((s) => s.clearFocusRequest)
+  const setupNeeded = useStore((s) => s.setupNeeded)
+  const setSetupNeeded = useStore((s) => s.setSetupNeeded)
 
   useEffect(() => {
     if (!focusRequested) return
@@ -39,6 +43,21 @@ export function App() {
     tick()
     return () => cancelAnimationFrame(raf)
   }, [setLevel])
+
+  useEffect(() => {
+    fetch(`${EV_API_URL}/setup`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`setup check failed (${res.status})`)
+        return res.json()
+      })
+      .then((data) => {
+        setSetupNeeded(Boolean(data.setup_needed))
+      })
+      .catch(() => {
+        // If the daemon is not reachable, assume we are still booting and do not block UI.
+        setSetupNeeded(false)
+      })
+  }, [setSetupNeeded])
 
   useEffect(() => {
     bridge.onOpen(() => setConnected(true))
@@ -120,11 +139,17 @@ export function App() {
   return (
     <>
       <Scene />
-      <Ignition onStart={powerOn} />
-      <Boot />
-      <Hud bridge={bridge} />
-      <Suggestions />
-      <Diagnostics />
+      {setupNeeded ? (
+        <SetupWizard />
+      ) : (
+        <>
+          <Ignition onStart={powerOn} />
+          <Boot />
+          <Hud bridge={bridge} />
+          <Suggestions />
+          <Diagnostics />
+        </>
+      )}
     </>
   )
 }

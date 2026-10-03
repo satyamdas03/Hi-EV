@@ -48,6 +48,7 @@ export interface EvState {
   streamPhase: string | null
   pendingConfirmation: PendingConfirmation | null
   focusRequested: boolean
+  setupNeeded: boolean | null
 
   setPhase: (phase: Phase) => void
   addUserTurn: (text: string) => void
@@ -61,6 +62,7 @@ export interface EvState {
   setBootNote: (note: string | null) => void
   setActiveTool: (tool: string | null) => void
   setPendingConfirmation: (confirmation: PendingConfirmation | null) => void
+  setSetupNeeded: (needed: boolean) => void
   requestFocus: () => void
   clearFocusRequest: () => void
   startStream: (phase: string) => void
@@ -84,6 +86,7 @@ export const useStore = create<EvState>((set) => ({
   streamPhase: null,
   pendingConfirmation: null,
   focusRequested: false,
+  setupNeeded: null,
 
   setPhase: (phase) => set({ phase }),
 
@@ -138,6 +141,7 @@ export const useStore = create<EvState>((set) => ({
   setBootNote: (note) => set({ bootNote: note }),
   setActiveTool: (tool) => set({ activeTool: tool }),
   setPendingConfirmation: (pendingConfirmation) => set({ pendingConfirmation }),
+  setSetupNeeded: (needed) => set({ setupNeeded: needed }),
   requestFocus: () => set({ focusRequested: true }),
   clearFocusRequest: () => set({ focusRequested: false }),
   clearError: () => set({ error: null }),
