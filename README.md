@@ -433,16 +433,27 @@ These are not blocked; they are sequenced after the core is reliable.
 
 ### Windows installer / launch MVP
 
-1. Download `Hi-EV.exe` (portable) or run the installer.
-2. Double-click `Hi-EV.exe`. It starts the daemon and opens your default browser to `http://127.0.0.1:7345`.
-3. On first run the HUD shows a setup wizard. Fill in:
+The recommended client install path is the PowerShell installer (avoids antivirus false-positives that often hit unsigned PyInstaller executables):
+
+1. Right-click `scripts/install_windows.ps1` and choose **Run with PowerShell**.
+2. The installer checks Python 3.12+, creates `%LOCALAPPDATA%\Hi-EV\venv`, installs Hi-EV, builds the web HUD, and creates Start Menu + Desktop shortcuts.
+3. Double-click the **Hi-EV** shortcut. It starts the daemon and opens your default browser to `http://127.0.0.1:7345`.
+4. On first run the HUD shows a setup wizard. Fill in:
    - **Notes path** — where your personal markdown notes live.
    - **LLM provider + API key** — NVIDIA, Anthropic, or OpenAI (at least one key is required for chat).
    - **GitHub token** — optional, for personal repo ingestion.
    - **Blocked handles / domains** — work or other handles/domains EV must never touch.
    - **Quiet hours** — when EV should not send proactive alerts.
-4. Click **Save**. The wizard writes `%LOCALAPPDATA%\Hi-EV\.env` and reloads the page.
-5. Use the HUD by voice (mic / wake word / spacebar) or type commands such as *"status RoboCAD"*.
+5. Click **Save**. The wizard writes `%LOCALAPPDATA%\Hi-EV\.env` and reloads the page.
+6. Use the HUD by voice (mic / wake word / spacebar) or type commands such as *"status RoboCAD"*.
+
+You can also build a standalone `Hi-EV.exe` with PyInstaller:
+
+```bash
+python scripts/build_installer.py
+```
+
+> **Note:** unsigned PyInstaller executables are frequently flagged by Windows Defender / McAfee. If the bundled EXE is blocked, use the PowerShell installer above or sign the executable with a code-signing certificate for distribution.
 
 ### Developer setup
 
