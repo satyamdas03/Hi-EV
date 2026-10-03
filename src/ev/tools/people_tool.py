@@ -2,9 +2,12 @@
 
 from typing import Any
 
+from ev.core import register
+
 from .registry import Tool
 
 
+@register("tool", "people")
 class PeopleTool(Tool):
     """Tier-0 read-only tool that lists known people."""
 

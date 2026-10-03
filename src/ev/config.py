@@ -105,6 +105,17 @@ class Settings(BaseSettings):
     desktop_auto_open_hud: bool = Field(default=True)
     setup_wizard_enabled: bool = Field(default=True)
 
+    # Phase F — Plugin architecture and skills.
+    skills_dir: Path | None = None
+    skills_auto_discover: bool = Field(default=True)
+    enable_skills: bool = Field(default=True)
+
+    # Phase H — Local voice pipeline.
+    voice_enabled: bool = Field(default=False)
+    voice_stt_backend: str | None = Field(default=None)
+    voice_tts_backend: str | None = Field(default=None)
+    voice_model_dir: Path = Field(default_factory=lambda: _default_app_data_dir() / "models")
+
     # Guard model / prompt-injection classifier settings.
     guard_llm_enabled: bool = Field(default=True)
     guard_caution_threshold: float = Field(default=0.6)

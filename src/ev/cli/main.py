@@ -23,6 +23,7 @@ from ev.tools.registry import ToolRegistry
 from ev.tools.research_tool import ResearchTool
 from ev.tools.status_tool import StatusTool
 from ev.tools.work_tool import WorkTool
+from ev.skills.manager import SkillManager
 
 
 @click.group()
@@ -424,3 +425,36 @@ def prep_today(json_output: bool):
                 click.echo(json.dumps({"preps": preps}, indent=2, default=str))
 
     asyncio.run(_run())
+
+
+@cli.group()
+def skills():
+    """Discovered SKILL.md packages."""
+
+
+@skills.command("list")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def list_skills(json_output: bool):
+    """List discovered skills."""
+    manager = SkillManager()
+    discovered = manager.discover()
+    if json_output:
+        click.echo(json.dumps({
+            "skills": [
+                {
+                    "name": m.name,
+                    "description": m.description,
+                    "version": m.version,
+                    "source_dir": str(m.source_dir),
+                }
+                for m in discovered.values()
+            ]
+        }, indent=2, default=str))
+    else:
+        if not discovered:
+            click.echo("EV: no skills discovered.")
+            return
+        click.echo(f"Skills ({len(discovered)}):")
+        for name in sorted(discovered):
+            m = discovered[name]
+            click.echo(f"  - {name} (v{m.version}): {m.description}")

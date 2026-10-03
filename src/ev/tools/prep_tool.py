@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import desc, select
 
+from ev.core import register
 from ev.db.models import Ingest
 from ev.llm.client import LLMClient
 from ev.memory.status import build_status_summary
@@ -12,6 +13,7 @@ from ev.memory.status import build_status_summary
 from .registry import Tool
 
 
+@register("tool", "prep")
 class PrepTool(Tool):
     """Tier-0 tool that synthesizes a prep packet for a meeting or deadline."""
 

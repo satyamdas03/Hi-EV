@@ -8,12 +8,14 @@ from typing import Any
 import redis.asyncio as redis
 
 from ev.config import get_settings
+from ev.core import register
 from ev.llm.client import LLMClient
 from ev.research.search import DuckDuckGoSearch
 
 from .registry import Tool
 
 
+@register("tool", "research")
 class ResearchTool(Tool):
     """Tier-0 read-only web research tool with LLM-synthesized citations."""
 

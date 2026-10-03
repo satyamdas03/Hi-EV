@@ -3,9 +3,12 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from ev.core import register
+
 from .registry import Tool
 
 
+@register("tool", "deadline_watcher")
 class DeadlineWatcherTool(Tool):
     """Tier-0 read-only tool that ranks deadlines by urgency."""
 

@@ -135,3 +135,27 @@ def test_focus_endpoint_notifies_clients():
         assert data["clients"] >= 1
         focus = ws.receive_json()
         assert focus["type"] == "focus"
+
+
+async def test_skills_endpoint_lists_builtin_skills():
+    """GET /skills returns the built-in skill catalog."""
+    from ev.server.api import app
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/skills")
+        assert response.status_code == 200
+        data = response.json()
+        names = {skill["name"] for skill in data["skills"]}
+        assert "hello_ev" in names
+        assert "summarize_notes" in names
+
+
+async def test_voice_chat_endpoint_rejects_empty_transcript():
+    """POST /voice/chat with empty text returns a graceful response."""
+    from ev.server.api import app
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/voice/chat", json={"text": "   "})
+        assert response.status_code == 200
+        data = response.json()
+        assert "didn't catch" in data["response"].lower()

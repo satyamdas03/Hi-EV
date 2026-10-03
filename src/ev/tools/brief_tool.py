@@ -2,11 +2,13 @@
 
 from datetime import UTC, datetime, timedelta
 
+from ev.core import register
 from ev.memory.status import build_status_summary
 
 from .registry import Tool
 
 
+@register("tool", "brief")
 class BriefTool(Tool):
     """Tier-0 read-only tool that aggregates status across active projects."""
 

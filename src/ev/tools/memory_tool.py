@@ -2,11 +2,13 @@
 
 from typing import Any
 
+from ev.core import register
 from ev.memory.chunks import Chunker
 
 from .registry import Tool
 
 
+@register("tool", "memory")
 class MemoryTool(Tool):
     """Tier-0 read-only tool that searches the user's semantic memory."""
 
@@ -54,6 +56,7 @@ class MemoryTool(Tool):
         return "\n".join(lines)
 
 
+@register("tool", "remember")
 class RememberTool(Tool):
     """Tier-1 user-initiated write that stores a sentence in semantic memory."""
 

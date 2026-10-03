@@ -10,12 +10,15 @@ Run:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import signal
 import sys
 import threading
 import time
 import webbrowser
+from pathlib import Path
+from typing import Any
 from urllib.parse import urljoin
 
 import httpx
@@ -24,6 +27,12 @@ from ev.config import get_settings
 
 logger = logging.getLogger("ev.desktop")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+
+# Global voice state. A single VoiceManager instance is created lazily when
+# voice is enabled; a busy flag prevents overlapping voice turns from the hotkey.
+_voice_manager: Any | None = None
+_voice_busy = threading.Event()
 
 
 def _open_hud(base_url: str) -> None:
@@ -70,6 +79,64 @@ def _parse_bind(base_url: str) -> tuple[str, int]:
     return host, port
 
 
+def _ensure_voice_manager(settings) -> Any | None:
+    """Lazily create the VoiceManager when voice is enabled."""
+    global _voice_manager
+    if _voice_manager is None and settings.voice_enabled:
+        try:
+            from ev.voice.manager import VoiceManager
+
+            _voice_manager = VoiceManager(settings=settings)
+            logger.info(
+                "Voice manager ready (stt=%s, tts=%s)",
+                _voice_manager.stt.name,
+                _voice_manager.tts.name,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Voice manager could not start: %s", exc)
+    return _voice_manager
+
+
+async def _async_voice_turn(base_url: str, voice) -> None:
+    """One voice turn: listen, transcribe, chat via REST, speak the reply."""
+    text = await voice.listen_and_transcribe()
+    if not text or not text.strip():
+        logger.info("Voice turn: empty transcript")
+        return
+    logger.info("Voice transcript: %r", text)
+    response = httpx.post(
+        urljoin(base_url, "/voice/chat"),
+        json={"text": text.strip()},
+        timeout=120,
+    )
+    response.raise_for_status()
+    reply = response.json().get("response", "")
+    if reply:
+        logger.info("Voice reply: %r", reply[:200])
+        await voice.say(reply)
+
+
+def _trigger_voice_turn(settings) -> None:
+    """Start a voice turn in a background thread if voice is enabled."""
+    voice = _ensure_voice_manager(settings)
+    if voice is None:
+        return
+    if _voice_busy.is_set():
+        logger.debug("Voice turn already in progress; ignoring hotkey.")
+        return
+    _voice_busy.set()
+
+    async def _run() -> None:
+        try:
+            await _async_voice_turn(settings.base_url, voice)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Voice turn failed: %s", exc)
+        finally:
+            _voice_busy.clear()
+
+    threading.Thread(target=lambda: asyncio.run(_run()), daemon=True).start()
+
+
 def _run_hotkey(settings) -> None:
     """Run the global hotkey listener inline."""
     if not settings.global_hotkey_enabled:
@@ -96,6 +163,7 @@ def _run_hotkey(settings) -> None:
         if target.issubset(current):
             logger.info("Hotkey %s pressed; focusing EV.", settings.global_hotkey_combo)
             _focus_hiev(settings.base_url)
+            _trigger_voice_turn(settings)
 
     def _on_release(key) -> None:
         token = None

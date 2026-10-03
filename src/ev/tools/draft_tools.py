@@ -4,6 +4,7 @@ import asyncio
 import subprocess
 from typing import Any
 
+from ev.core import register
 from ev.llm.client import LLMClient
 
 from .registry import Tool
@@ -32,6 +33,7 @@ class DraftTool(Tool):
             await self.store.add_event(project_name, event_type, description)
 
 
+@register("tool", "draft_commit")
 class DraftCommitTool(DraftTool):
     """Draft a commit message from staged changes."""
 
@@ -66,6 +68,7 @@ class DraftCommitTool(DraftTool):
         return {"draft": draft, "tier": self.tier, "project": project}
 
 
+@register("tool", "draft_pr")
 class DraftPrTool(DraftTool):
     """Draft a PR title and body from the current branch diff vs main."""
 
@@ -111,6 +114,7 @@ class DraftPrTool(DraftTool):
         return {"draft": draft, "tier": self.tier, "project": project}
 
 
+@register("tool", "draft_reply")
 class DraftReplyTool(DraftTool):
     """Draft an email reply from a thread snippet."""
 

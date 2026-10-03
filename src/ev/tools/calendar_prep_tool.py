@@ -3,11 +3,13 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from ev.core import register
 from ev.llm.client import LLMClient
 
 from .registry import Tool
 
 
+@register("tool", "calendar_prep")
 class CalendarPrepTool(Tool):
     """Tier-0 tool that builds a prep packet from nearby calendar deadlines."""
 

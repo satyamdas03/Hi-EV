@@ -3,10 +3,13 @@
 from datetime import UTC, datetime
 from typing import Any
 
+from ev.core import register
+
 from .deadline_watcher import DeadlineWatcherTool
 from .registry import Tool
 
 
+@register("tool", "alerts")
 class AlertsTool(Tool):
     """Tier-0 read-only tool that returns the current urgent alert digest."""
 

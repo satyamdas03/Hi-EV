@@ -3,11 +3,13 @@
 import asyncio
 from typing import Any
 
+from ev.core import register
 from ev.memory.status import build_status_summary
 
 from .registry import Tool
 
 
+@register("tool", "work_on")
 class WorkTool(Tool):
     """Tier-2 tool that spawns Claude Code in a repo with task context."""
 

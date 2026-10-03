@@ -26,18 +26,9 @@ from ev.server.setup import (
     get_setup_defaults,
 )
 from ev.server.telegram import TelegramRelay
-from ev.tools.alerts_tool import AlertsTool
-from ev.tools.brief_tool import BriefTool
-from ev.tools.calendar_prep_tool import CalendarPrepTool
-from ev.tools.draft_tools import DraftCommitTool, DraftPrTool, DraftReplyTool
-from ev.tools.memory_tool import MemoryTool, RememberTool
-from ev.tools.obligations_tool import ObligationsTool
-from ev.tools.people_tool import PeopleTool
-from ev.tools.prep_tool import PrepTool
+from ev.skills import load_skills_into_registry
+from ev.skills.manager import SkillManager
 from ev.tools.registry import ToolRegistry
-from ev.tools.research_tool import ResearchTool
-from ev.tools.status_tool import StatusTool
-from ev.tools.work_tool import WorkTool
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +46,11 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.settings = settings
     app.state.active_websockets: set[WebSocket] = set()
+
+    # Phase F: discover skills and register them as tools.
+    if settings.enable_skills:
+        load_skills_into_registry()
+
     alert_task = asyncio.create_task(_alert_loop(settings))
     brief_task = asyncio.create_task(_brief_loop(settings))
     ingest_task = asyncio.create_task(_ingest_loop(settings))
@@ -75,8 +71,6 @@ async def lifespan(app: FastAPI):
 
 async def _alert_loop(settings):
     """Background loop that pushes urgent deadline digests to active clients."""
-    from ev.tools.deadline_watcher import DeadlineWatcherTool
-
     while True:
         try:
             await asyncio.sleep(settings.alert_interval_sec)
@@ -90,8 +84,8 @@ async def _alert_loop(settings):
         try:
             async with SessionLocal() as session:
                 store = MemoryStore(session)
-                watcher = DeadlineWatcherTool(urgent_hours=settings.alert_window_hours)
-                watcher.bind_store(store)
+                registry = ToolRegistry(store)
+                watcher = registry.get("deadline_watcher")
                 result = await watcher.run()
                 urgent = result["urgent"]
                 if not urgent:
@@ -144,7 +138,6 @@ async def _brief_loop(settings):
                 async with SessionLocal() as session:
                     store = MemoryStore(session)
                     registry = ToolRegistry(store)
-                    registry.register(BriefTool())
                     brief_text = await registry.get("brief").run()
                 brief_payload = {
                     "type": "alert",
@@ -230,12 +223,15 @@ class ListFilterRequest(BaseModel):
     limit: int = 50
 
 
+def _tool_registry(store) -> ToolRegistry:
+    """Return a ToolRegistry that has auto-discovered all registered tools."""
+    return ToolRegistry(store)
+
+
 @app.post("/status")
 async def status_endpoint(req: StatusRequest):
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        registry.register(StatusTool())
+        registry = _tool_registry(MemoryStore(session))
         summary = await registry.get("status").run(project=req.project)
         return {"summary": summary}
 
@@ -243,9 +239,7 @@ async def status_endpoint(req: StatusRequest):
 @app.post("/brief")
 async def brief_endpoint():
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        registry.register(BriefTool())
+        registry = _tool_registry(MemoryStore(session))
         brief_text = await registry.get("brief").run()
         return {"brief": brief_text}
 
@@ -253,9 +247,7 @@ async def brief_endpoint():
 @app.post("/research")
 async def research_endpoint(req: ResearchRequest):
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        registry.register(ResearchTool())
+        registry = _tool_registry(MemoryStore(session))
         result = await registry.get("research").run(query=req.query)
         return result
 
@@ -263,9 +255,7 @@ async def research_endpoint(req: ResearchRequest):
 @app.post("/work")
 async def work_endpoint(req: WorkRequest):
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        registry.register(WorkTool())
+        registry = _tool_registry(MemoryStore(session))
         result = await registry.get("work_on").run(project=req.project, task=req.task)
         return result
 
@@ -275,20 +265,17 @@ async def draft_endpoint(req: DraftRequest):
     async with SessionLocal() as session:
         store = MemoryStore(session)
         if req.type == "reply":
-            registry = ToolRegistry(None)
-            registry.register(DraftReplyTool())
+            registry = _tool_registry(None)
             result = await registry.get("draft_reply").run(
                 to=req.to or "",
                 subject=req.subject or "",
                 thread_snippet=req.snippet or "",
             )
             return result
-        registry = ToolRegistry(store)
+        registry = _tool_registry(store)
         if req.type == "commit":
-            registry.register(DraftCommitTool())
             result = await registry.get("draft_commit").run(project=req.project or "")
         elif req.type == "pr":
-            registry.register(DraftPrTool())
             result = await registry.get("draft_pr").run(project=req.project or "")
         else:
             return {"error": f"Unknown draft type: {req.type}"}
@@ -298,9 +285,7 @@ async def draft_endpoint(req: DraftRequest):
 @app.post("/calendar-prep")
 async def calendar_prep_endpoint(req: CalendarPrepRequest):
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        registry.register(CalendarPrepTool())
+        registry = _tool_registry(MemoryStore(session))
         result = await registry.get("calendar_prep").run(time=req.time)
         return result
 
@@ -308,11 +293,7 @@ async def calendar_prep_endpoint(req: CalendarPrepRequest):
 @app.post("/deadlines")
 async def deadlines_endpoint(req: ListFilterRequest):
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        from ev.tools.deadline_watcher import DeadlineWatcherTool
-
-        registry.register(DeadlineWatcherTool())
+        registry = _tool_registry(MemoryStore(session))
         result = await registry.get("deadline_watcher").run(project_name=req.project)
         return result
 
@@ -320,9 +301,7 @@ async def deadlines_endpoint(req: ListFilterRequest):
 @app.post("/people")
 async def people_endpoint(req: ListFilterRequest):
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        registry.register(PeopleTool())
+        registry = _tool_registry(MemoryStore(session))
         result = await registry.get("people").run(project_name=req.project, limit=req.limit)
         return result
 
@@ -330,9 +309,7 @@ async def people_endpoint(req: ListFilterRequest):
 @app.post("/obligations")
 async def obligations_endpoint(req: ListFilterRequest):
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        registry.register(ObligationsTool())
+        registry = _tool_registry(MemoryStore(session))
         result = await registry.get("obligations").run(
             project_name=req.project,
             status=req.status,
@@ -345,9 +322,7 @@ async def obligations_endpoint(req: ListFilterRequest):
 async def alerts_endpoint(req: ListFilterRequest | None = None):
     project = req.project if req else None
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        registry.register(AlertsTool())
+        registry = _tool_registry(MemoryStore(session))
         result = await registry.get("alerts").run(project_name=project)
         return result
 
@@ -355,9 +330,7 @@ async def alerts_endpoint(req: ListFilterRequest | None = None):
 @app.post("/prep")
 async def prep_endpoint(req: PrepRequest):
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        registry.register(PrepTool())
+        registry = _tool_registry(MemoryStore(session))
         result = await registry.get("prep").run(
             title=req.title,
             project_name=req.project,
@@ -369,9 +342,7 @@ async def prep_endpoint(req: PrepRequest):
 @app.post("/memory")
 async def memory_endpoint(req: MemorySearchRequest):
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        registry = ToolRegistry(store)
-        registry.register(MemoryTool())
+        registry = _tool_registry(MemoryStore(session))
         result = await registry.get("memory").run(
             query=req.query,
             project_name=req.project,
@@ -383,9 +354,8 @@ async def memory_endpoint(req: MemorySearchRequest):
 @app.post("/remember")
 async def remember_endpoint(req: RememberRequest):
     async with SessionLocal() as session:
-        store = MemoryStore(session)
-        tool = RememberTool()
-        tool.bind_store(store)
+        registry = _tool_registry(MemoryStore(session))
+        tool = registry.get("remember")
         result = await tool.run(text=req.text, project_name=req.project)
         return result
 
@@ -466,6 +436,31 @@ class ThreadRenameRequest(BaseModel):
     title: str
 
 
+class VoiceChatRequest(BaseModel):
+    text: str
+
+
+class _CapturingWebSocket:
+    """Minimal WebSocket stand-in that records every JSON payload sent by ChatSession."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict[str, Any]] = []
+
+    async def send_json(self, payload: dict[str, Any]) -> None:
+        self.sent.append(payload)
+
+
+def _response_from_captured(sent: list[dict[str, Any]]) -> str:
+    """Reconstruct a plain-text response from captured ChatSession deltas."""
+    deltas: list[str] = []
+    for payload in sent:
+        if payload.get("type") == "delta" and "text" in payload:
+            deltas.append(str(payload["text"]))
+        elif payload.get("type") == "confirm":
+            return payload.get("prompt", "EV needs your confirmation before acting.")
+    return "".join(deltas)
+
+
 @app.post("/focus")
 async def focus_endpoint():
     """Desktop hotkey/tray hook: notify all connected HUD clients to come to foreground."""
@@ -474,6 +469,44 @@ async def focus_endpoint():
         with suppress(Exception):
             await ws.send_json(focus_payload)
     return {"focused": True, "clients": len(getattr(app.state, "active_websockets", set()))}
+
+
+@app.post("/voice/chat")
+async def voice_chat_endpoint(req: VoiceChatRequest):
+    """Synchronous text-in/text-out chat path for the desktop voice pipeline.
+
+    The voice client records audio, transcribes it locally, and POSTs the
+    transcript here. The plain-text reply is then synthesized and spoken.
+    """
+    if not req.text or not req.text.strip():
+        return {"response": "I didn't catch that."}
+
+    ws = _CapturingWebSocket()
+    session = ChatSession(ws)
+    try:
+        await session.handle_message({"type": "transcript", "text": req.text.strip()})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Voice chat turn failed: %s", exc)
+        return {"response": f"EV had a problem: {exc}"}
+    return {"response": _response_from_captured(ws.sent)}
+
+
+@app.get("/skills")
+async def list_skills_endpoint():
+    """Return the catalog of discovered SKILL.md packages."""
+    manager = SkillManager()
+    skills = manager.discover()
+    return {
+        "skills": [
+            {
+                "name": manifest.name,
+                "description": manifest.description,
+                "version": manifest.version,
+                "source_dir": str(manifest.source_dir),
+            }
+            for manifest in skills.values()
+        ]
+    }
 
 
 @app.post("/threads")
