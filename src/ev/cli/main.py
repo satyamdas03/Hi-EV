@@ -482,3 +482,60 @@ def run_eval(suite_dir: str, json_output: bool):
             click.echo(text_report(results))
 
     asyncio.run(_run())
+
+
+@cli.group()
+def secrets():
+    """Encrypted local secret vault."""
+
+
+@secrets.command("set")
+@click.argument("name")
+@click.argument("value")
+def secrets_set(name: str, value: str):
+    """Store NAME=VALUE in the encrypted vault."""
+    from ev.secrets import EncryptedSecretStore, SecretsError
+
+    try:
+        EncryptedSecretStore().set(name, value)
+        click.echo(f"Stored secret '{name}'.")
+    except SecretsError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@secrets.command("get")
+@click.argument("name")
+def secrets_get(name: str):
+    """Decrypt and print a secret."""
+    from ev.secrets import EncryptedSecretStore, SecretsError
+
+    try:
+        click.echo(EncryptedSecretStore().get(name))
+    except SecretsError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@secrets.command("list")
+def secrets_list():
+    """List secret names stored in the vault."""
+    from ev.secrets import EncryptedSecretStore
+
+    names = EncryptedSecretStore().list()
+    if not names:
+        click.echo("EV: no secrets stored.")
+        return
+    click.echo("Secrets:")
+    for name in names:
+        click.echo(f"  - {name}")
+
+
+@secrets.command("delete")
+@click.argument("name")
+def secrets_delete(name: str):
+    """Remove a secret from the vault."""
+    from ev.secrets import EncryptedSecretStore
+
+    if EncryptedSecretStore().delete(name):
+        click.echo(f"Deleted secret '{name}'.")
+    else:
+        click.echo(f"EV: secret '{name}' not found.")

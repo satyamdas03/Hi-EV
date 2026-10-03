@@ -153,6 +153,7 @@ config/secrets*.yaml
 
 # Source package overrides
 !src/ev/memory/
+!src/ev/secrets/
 
 # Vector / model cache
 models/

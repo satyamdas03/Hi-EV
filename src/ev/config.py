@@ -1,5 +1,6 @@
 """Hi-EV settings loader."""
 
+import logging
 import os
 import platform
 from functools import lru_cache
@@ -7,6 +8,8 @@ from pathlib import Path, PurePosixPath
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 def _split_csv(value: str | None) -> list[str]:
@@ -32,6 +35,24 @@ def _default_database_url() -> str:
     db_dir = _default_app_data_dir()
     db_dir.mkdir(parents=True, exist_ok=True)
     return f"sqlite+aiosqlite:///{db_dir / 'hiev.db'}"
+
+
+def _load_encrypted_secrets_into_env() -> None:
+    """If an encrypted vault exists, decrypt its contents into os.environ.
+
+    This is called once before constructing `Settings()` so that secrets in the
+    vault are available to `pydantic-settings` exactly like `.env` values.
+    """
+    try:
+        from ev.secrets import EncryptedSecretStore
+    except ImportError:
+        return
+    try:
+        store = EncryptedSecretStore()
+        if store.exists():
+            store.load_into_env()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not load encrypted secrets vault: %s", exc)
 
 
 class Settings(BaseSettings):
@@ -144,4 +165,5 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Return the cached application settings."""
+    _load_encrypted_secrets_into_env()
     return Settings()
