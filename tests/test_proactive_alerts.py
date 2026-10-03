@@ -1,6 +1,7 @@
 """Tests for proactive alert push, morning brief scheduler, and Telegram relay."""
 
 import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -18,6 +19,13 @@ async def proactive_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
+    # Cancel any background tasks left over from earlier tests before dropping
+    # tables; leftover aiosqlite connections can otherwise hold a lock on the
+    # shared SQLite file and block DROP TABLE.
+    for task in [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]:
+        task.cancel()
+        with suppress(Exception):
+            await task
     # Dispose pooled connections before dropping tables so teardown does not
     # race with any async task that still holds a connection from this engine.
     await engine.dispose()

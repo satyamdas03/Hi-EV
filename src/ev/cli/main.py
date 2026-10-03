@@ -484,6 +484,32 @@ def run_eval(suite_dir: str, json_output: bool):
     asyncio.run(_run())
 
 
+@cli.command()
+@click.option("--repo", default="satyamdas03/Hi-EV", help="GitHub owner/repo to check")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+def update(repo: str, json_output: bool):
+    """Check whether a newer Hi-EV release is available."""
+    from ev.updater import UpdateChecker
+
+    async def _run():
+        checker = UpdateChecker(repo=repo)
+        result = await checker.check()
+        if json_output:
+            click.echo(json.dumps(result, indent=2, default=str))
+        else:
+            if result.get("error"):
+                click.echo(f"EV: {result['error']}", err=True)
+            elif result["update_available"]:
+                click.echo(
+                    f"Update available: {result['current']} → {result['latest']}\n"
+                    f"Run the installer: {result['url']}"
+                )
+            else:
+                click.echo(f"Hi-EV is up to date ({result['current']}).")
+
+    asyncio.run(_run())
+
+
 @cli.group()
 def secrets():
     """Encrypted local secret vault."""

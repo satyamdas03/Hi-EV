@@ -196,6 +196,9 @@ def _run_tray(settings) -> None:
     def on_focus(icon, item):
         threading.Thread(target=_focus_hiev, args=(settings.base_url,), daemon=True).start()
 
+    def on_check_updates(icon, item):
+        threading.Thread(target=_check_updates, args=(settings.base_url,), daemon=True).start()
+
     def on_exit(icon, item):
         icon.stop()
         _shutdown()
@@ -203,6 +206,7 @@ def _run_tray(settings) -> None:
     menu = pystray.Menu(
         pystray.MenuItem("Open HUD", on_open),
         pystray.MenuItem("Focus EV", on_focus),
+        pystray.MenuItem("Check for updates", on_check_updates),
         pystray.MenuItem("Exit", on_exit),
     )
     icon = pystray.Icon("hiev", _build_icon(), "Hi-EV", menu)
@@ -225,6 +229,30 @@ def _focus_hiev(base_url: str) -> None:
         logger.info("Focus request sent; clients notified: %s", data.get("clients", 0))
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not reach EV daemon at %s: %s", url, exc)
+
+
+def _check_updates(base_url: str) -> None:
+    """Check GitHub for a newer Hi-EV release and log the result."""
+    from ev.updater import UpdateChecker
+
+    async def _run() -> None:
+        try:
+            result = await UpdateChecker().check()
+            if result.get("error"):
+                logger.warning("Update check failed: %s", result["error"])
+            elif result["update_available"]:
+                logger.info(
+                    "Update available: %s → %s. Installer: %s",
+                    result["current"],
+                    result["latest"],
+                    result["url"],
+                )
+            else:
+                logger.info("Hi-EV is up to date (%s).", result["current"])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Update check failed: %s", exc)
+
+    threading.Thread(target=lambda: asyncio.run(_run()), daemon=True).start()
 
 
 def _build_icon(size: int = 64):
