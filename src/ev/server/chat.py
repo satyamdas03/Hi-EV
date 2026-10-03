@@ -28,6 +28,7 @@ from ev.tools.people_tool import PeopleTool
 from ev.tools.prep_tool import PrepTool
 from ev.tools.registry import ToolRegistry
 from ev.tools.research_tool import ResearchTool
+from ev.sandbox.tool import SandboxTool
 from ev.tools.status_tool import StatusTool
 from ev.tools.work_tool import WorkTool
 
@@ -470,6 +471,7 @@ class ChatSession:
         registry.register(DraftCommitTool())
         registry.register(DraftPrTool())
         registry.register(DraftReplyTool())
+        registry.register(SandboxTool())
 
     def _format_result(self, intent: str, result: Any) -> str:
         if isinstance(result, str):
