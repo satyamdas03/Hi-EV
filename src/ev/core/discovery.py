@@ -11,7 +11,6 @@ import importlib
 import logging
 import pkgutil
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 

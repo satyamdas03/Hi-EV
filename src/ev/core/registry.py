@@ -9,14 +9,15 @@ LLM engines, memory backends, tools, agents, and skills hot-swappable.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Generic, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
 
-class RegistryBase(Generic[T]):
+class RegistryBase[T]:
     """A typed registry of plugin implementations.
 
     Implementations register themselves by name via the `register` decorator

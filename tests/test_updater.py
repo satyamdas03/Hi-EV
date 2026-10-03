@@ -15,9 +15,11 @@ async def test_update_available_when_latest_greater():
     checker = UpdateChecker(repo="owner/repo")
     release = {"tag_name": "v0.2.0"}
 
-    with patch.object(UpdateChecker, "current_version", return_value="0.1.0"):
-        with patch.object(UpdateChecker, "latest_release", return_value=release):
-            result = await checker.check()
+    with (
+        patch.object(UpdateChecker, "current_version", return_value="0.1.0"),
+        patch.object(UpdateChecker, "latest_release", return_value=release),
+    ):
+        result = await checker.check()
 
     assert result["update_available"] is True
     assert result["current"] == "0.1.0"
@@ -31,9 +33,11 @@ async def test_up_to_date_when_latest_equals_current():
     checker = UpdateChecker(repo="owner/repo")
     release = {"tag_name": "v1.0.0"}
 
-    with patch.object(UpdateChecker, "current_version", return_value="1.0.0"):
-        with patch.object(UpdateChecker, "latest_release", return_value=release):
-            result = await checker.check()
+    with (
+        patch.object(UpdateChecker, "current_version", return_value="1.0.0"),
+        patch.object(UpdateChecker, "latest_release", return_value=release),
+    ):
+        result = await checker.check()
 
     assert result["update_available"] is False
     assert result["current"] == "1.0.0"
@@ -46,9 +50,11 @@ async def test_no_update_when_latest_lower():
     checker = UpdateChecker(repo="owner/repo")
     release = {"tag_name": "v0.9.0"}
 
-    with patch.object(UpdateChecker, "current_version", return_value="1.0.0"):
-        with patch.object(UpdateChecker, "latest_release", return_value=release):
-            result = await checker.check()
+    with (
+        patch.object(UpdateChecker, "current_version", return_value="1.0.0"),
+        patch.object(UpdateChecker, "latest_release", return_value=release),
+    ):
+        result = await checker.check()
 
     assert result["update_available"] is False
 
@@ -57,13 +63,15 @@ async def test_no_update_when_latest_lower():
 async def test_check_reports_error_on_network_failure():
     checker = UpdateChecker(repo="owner/repo")
 
-    with patch.object(UpdateChecker, "current_version", return_value="0.1.0"):
-        with patch.object(
+    with (
+        patch.object(UpdateChecker, "current_version", return_value="0.1.0"),
+        patch.object(
             UpdateChecker,
             "latest_release",
             side_effect=UpdateCheckError("network down"),
-        ):
-            result = await checker.check()
+        ),
+    ):
+        result = await checker.check()
 
     assert result["update_available"] is False
     assert result["current"] == "0.1.0"
@@ -76,9 +84,11 @@ async def test_check_strips_leading_v_for_comparison():
     checker = UpdateChecker(repo="owner/repo")
     release = {"tag_name": "1.2.3"}
 
-    with patch.object(UpdateChecker, "current_version", return_value="v1.2.3"):
-        with patch.object(UpdateChecker, "latest_release", return_value=release):
-            result = await checker.check()
+    with (
+        patch.object(UpdateChecker, "current_version", return_value="v1.2.3"),
+        patch.object(UpdateChecker, "latest_release", return_value=release),
+    ):
+        result = await checker.check()
 
     assert result["update_available"] is False
 
@@ -115,9 +125,11 @@ async def test_latest_release_queries_github():
 async def test_latest_release_raises_on_network_error():
     checker = UpdateChecker(repo="owner/repo")
 
-    with patch("httpx.AsyncClient.get", side_effect=Exception("api rate limited")):
-        with pytest.raises(UpdateCheckError):
-            await checker.latest_release()
+    with (
+        patch("httpx.AsyncClient.get", side_effect=Exception("api rate limited")),
+        pytest.raises(UpdateCheckError),
+    ):
+        await checker.latest_release()
 
 
 def test_normalize_version_handles_v_prefix_and_prerelease():

@@ -1,8 +1,10 @@
 # Phase B — Reasoning Router + Eval Harness
 
-> **Date:** 2026-09-17
+> **Date:** 2026-09-17 (updated 2026-10-03)
 > **Goal:** Give Hi-EV a reasoning router that chooses the right depth per request, stream responses to the HUD, and measure whether changes make it better or worse. This is the foundation for safe autonomy.
 > **Phase A status:** Complete and pushed (`40aaa2b`). See [`memory/hi-ev-phase-a-semantic-memory.md`](../../../memory/hi-ev-phase-a-semantic-memory.md).
+
+> **Update 2026-10-03:** Phases A through F are now complete and pushed to `origin/main` (commit `02781e2`, 253 passed / 1 skipped). The eval harness evolved into a reusable `ev.eval` runner in Phase F; streaming, router, and guard remain in daily use. Phase G is next. See the [honest state assessment](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md) and the [Phase F dossier](2026-10-03-phase-f-plugin-architecture.md) for the full current picture.
 
 ---
 
@@ -163,5 +165,9 @@ Phase B installs the measurement and routing layer that every future phase (proa
 
 Phase B is the prerequisite for Phase C because it gives us the router to decide *what* to stream and the eval harness to know *whether* the proactive content is any good.
 
-**Next:** [Phase C — Proactive Alerts + Persistent Context](2026-09-22-phase-c-proactive-context.md) is complete; see the linked plan.
-**Current:** [Phase D — Safe Autonomy + Desktop Presence](2026-09-22-phase-d-safe-autonomy.md) is also complete.
+**Next:** Phases C, D, E, and F are complete. See the linked plans and the [honest state assessment](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md) for the full current picture.
+- [Phase C — Proactive Alerts + Persistent Context](2026-09-22-phase-c-proactive-context.md)
+- [Phase D — Safe Autonomy + Desktop Presence](2026-09-22-phase-d-safe-autonomy.md)
+- [Phase E — Launch MVP](2026-10-02-phase-e-launch-mvp.md)
+- [Phase F — Plugin Architecture, Skills, Voice, and Auto-Updater](2026-10-03-phase-f-plugin-architecture.md)
+- [Phase G — Tauri wrapper, richer OS presence, skill evals, cloud relay, observability](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md#phase-g--tauri-desktop-wrapper-richer-os-presence-skill-evals-cloud-relay-observability-active)

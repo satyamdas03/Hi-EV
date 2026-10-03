@@ -7,12 +7,11 @@ self-register in the global plugin registry.
 from pathlib import Path
 
 from ev.core.discovery import discover_package
-from ev.tools.registry import ToolRegistry
 
 # Trigger decorator registration for every tool module.
 discover_package("ev.tools", Path(__file__).resolve().parent)
 
-from .registry import Tool, ToolRegistry  # noqa: E402
-from .status_tool import StatusTool  # noqa: E402
+from .registry import Tool, ToolRegistry
+from .status_tool import StatusTool
 
-__all__ = ["Tool", "ToolRegistry", "StatusTool"]
+__all__ = ["StatusTool", "Tool", "ToolRegistry"]

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from ev.core import BaseAgent, register
 from ev.core.component import AgentContext, AgentResult
@@ -28,7 +28,7 @@ class OrchestratorAgent(BaseAgent):
     name = "orchestrator"
 
     # Map natural intent names returned by the LLM to the actual tool.name values.
-    _INTENT_ALIASES = {
+    _INTENT_ALIASES: ClassVar[dict[str, str]] = {
         "work": "work_on",
         "deadline": "deadline_watcher",
         "deadlines": "deadline_watcher",

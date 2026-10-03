@@ -103,13 +103,13 @@ async def _async_voice_turn(base_url: str, voice) -> None:
         logger.info("Voice turn: empty transcript")
         return
     logger.info("Voice transcript: %r", text)
-    response = httpx.post(
-        urljoin(base_url, "/voice/chat"),
-        json={"text": text.strip()},
-        timeout=120,
-    )
-    response.raise_for_status()
-    reply = response.json().get("response", "")
+    async with httpx.AsyncClient(timeout=120) as client:
+        response = await client.post(
+            urljoin(base_url, "/voice/chat"),
+            json={"text": text.strip()},
+        )
+        response.raise_for_status()
+        reply = response.json().get("response", "")
     if reply:
         logger.info("Voice reply: %r", reply[:200])
         await voice.say(reply)

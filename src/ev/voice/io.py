@@ -39,7 +39,7 @@ def _write_wav_with_wave(path: Path, samples: Any, samplerate: int) -> Path:
 
     This avoids a hard dependency on `soundfile` for tests and mock backends.
     """
-    import numpy as np  # noqa: ICN001
+    import numpy as np
 
     audio = np.asarray(samples)
     if audio.dtype != np.float32:
@@ -88,7 +88,7 @@ def record_until_silence(
         silence_duration: seconds of silence before stopping.
         max_duration: hard cap on recording length.
     """
-    import numpy as np  # noqa: ICN001
+    import numpy as np
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)

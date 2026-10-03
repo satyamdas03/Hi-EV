@@ -88,7 +88,6 @@ class SkillTool(BaseTool):
             return {"error": f"Skill '{self.name}' missing run.py"}
 
         import json
-        import tempfile
 
         payload = json.dumps({"args": args, "store": None}).encode("utf-8")
         try:

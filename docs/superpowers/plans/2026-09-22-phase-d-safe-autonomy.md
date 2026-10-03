@@ -1,9 +1,11 @@
 # Phase D — Safe Autonomy + Desktop Presence
 
-> **Date:** 2026-09-22
+> **Date:** 2026-09-22 (updated 2026-10-03)
 > **Goal:** EV can act on T1 reliably and confirm T2 safely; it lives outside the browser.
-> **Status:** ✅ COMPLETE and pushed to `origin/main` (`92ff90d`). Live smoke test passed against the daemon on `127.0.0.1:7345`.
+> **Status:** ✅ COMPLETE and pushed to `origin/main` (`92ff90d` for original Phase D; `02781e2` for Phase F refresh). Live smoke test passed against the daemon on `127.0.0.1:7345`.
 > **Previous phase:** [Phase C — Proactive Alerts + Persistent Context](2026-09-22-phase-c-proactive-context.md)
+
+> **Update 2026-10-03:** The desktop presence scripts were consolidated into a single `scripts/desktop_presence.py` entry point in Phase F (commit `02781e2`). Phase F also added local voice, skills, sandbox, eval runner, encrypted secrets, and a read-only auto-updater. Phases E and F are complete. Phase G is next. See the [honest state assessment](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md) and the [Phase F dossier](2026-10-03-phase-f-plugin-architecture.md) for the full current picture.
 
 ---
 
@@ -77,13 +79,18 @@
 
 ---
 
-## Remaining polish (Phase E prep)
+## Remaining polish (Phase E/F resolution)
 
-- Package the tray widget / global hotkey as a single desktop entry point.
-- Replace browser SpeechRecognition with a local STT model for wake word and transcription.
+The following items were deferred to later phases and are now shipped:
+
+- ✅ **Package the tray widget / global hotkey as a single desktop entry point.** Shipped in Phase F as `scripts/desktop_presence.py`, which launches the daemon, global hotkey, system tray, and (when voice is enabled) a local voice loop.
+- ✅ **Replace browser SpeechRecognition with a local STT model.** Shipped in Phase F via `ev.voice` with faster-whisper, kokoro, pyttsx3, and mock backends; `scripts/desktop_presence.py` uses `VoiceManager` for the hotkey voice loop.
 
 ---
 
 ## Next action
 
-Phase E — Local Voice + Advanced HUD + Self-Expansion: local STT/TTS, HTML blades, packaged desktop presence, tool self-authoring.
+Phases E and F are complete. Phase G is next.
+- [Phase E — Launch MVP](2026-10-02-phase-e-launch-mvp.md)
+- [Phase F — Plugin Architecture, Skills, Voice, and Auto-Updater](2026-10-03-phase-f-plugin-architecture.md)
+- [Phase G roadmap](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md#phase-g--tauri-desktop-wrapper-richer-os-presence-skill-evals-cloud-relay-observability-active)

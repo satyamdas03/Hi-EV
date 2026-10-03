@@ -1,11 +1,13 @@
 # Phase A Prep Sprint — Postgres + pgvector, Config Blocklist, Migration Discipline
 
-> **Date:** 2026-09-17
-> **Goal:** Clear the blockers so Phase A (Ambient Ingestion + Semantic Memory) can proceed without creating unrecoverable technical debt.
+> **Date:** 2026-09-17 (updated 2026-10-03)
+> **Goal:** Clear the blockers so Phase A (Ambient Ingestion + Semantic Memory) could proceed without creating unrecoverable technical debt.
 
 > **Update 2026-09-17:** Postgres 16 + pgvector was not installed in the environment and required user action, so the default local database was switched to **SQLite + sqlite-vec** instead. Postgres + pgvector remains an optional upgrade path via `EV_DATABASE_URL` and `scripts/setup_postgres.py`. All acceptance criteria below were met against the SQLite default.
 
 > **Update 2026-09-17 (later):** Phase A proper is now complete and pushed to `origin/main`. See [`memory/hi-ev-phase-a-semantic-memory.md`](../../../memory/hi-ev-phase-a-semantic-memory.md) for the final shipped state.
+
+> **Update 2026-10-03:** Phases A through F are now complete and pushed to `origin/main` (commit `02781e2`, 253 passed / 1 skipped). The system has since added a plugin registry, skills runtime, local voice pipeline, safe code sandbox, eval runner, encrypted secrets vault, read-only auto-updater, and a unified `scripts/desktop_presence.py` entry point. Phase G is next. See the [honest state assessment](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md) for the full current picture.
 
 ---
 
@@ -187,3 +189,9 @@ Phase A proper is now unblocked:
 - `ev remember` command.
 
 When Postgres is installed later, a single Alembic revision can migrate the sqlite-vec virtual table to a pgvector `vector(384)` column. The embedding model, dimensions, and `DocumentChunk` schema stay the same.
+
+---
+
+## Current state (2026-10-03)
+
+The prep sprint was completed as planned and Phase A shipped. The system has since progressed through Phases B, C, D, E, and F. The latest commit on `origin/main` is `02781e2` with **253 passed, 1 skipped**. See the [honest state assessment](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md) and the [Phase F dossier](2026-10-03-phase-f-plugin-architecture.md) for the full shipped state.

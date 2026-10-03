@@ -1,8 +1,11 @@
 # Phase E Launch MVP — Local Installer + Setup Wizard
 
-> **Date:** 2026-10-02
+> **Date:** 2026-10-02 (updated 2026-10-03)
 > **Goal:** Ship a launch-ready, local-only Hi-EV that a non-technical client can download, install, and run on Windows without writing `.env` files or opening a terminal.
 > **Scope:** Local installer only. No hosted cloud preview (preserves the local-first/personal-only boundary).
+> **Status:** ✅ COMPLETE and pushed to `origin/main` (commit `02781e2`, 253 passed / 1 skipped).
+
+> **Update 2026-10-03:** Several items originally listed as "out of scope for v1.0" were actually shipped in Phase F (commit `02781e2`): local STT/TTS via `ev.voice`, encrypted secrets vault via `ev.secrets`, and a read-only auto-updater via `ev.updater`. Phase F also added OpenJarvis-style plugin registry/ABCs, skills runtime, safe code sandbox, and eval runner abstraction. Phase G is next. See the [honest state assessment](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md) and the [Phase F dossier](2026-10-03-phase-f-plugin-architecture.md) for the full current picture.
 
 ---
 
@@ -23,15 +26,20 @@ Everything stays on their machine. No cloud brain, no hosted preview.
 
 ## 2. Explicitly out of scope for v1.0
 
-These remain on the Phase E v1.1 roadmap:
+These remain on the Phase E v1.1 / Phase G roadmap:
 
-- Local STT/TTS (faster-whisper / Piper / Kokoro)
 - Tool self-authoring loop
-- OS keyring / encrypted secrets store
 - Cloud relay / Telegram beyond the existing skeleton
-- macOS / Linux installers
-- Auto-updater
+- macOS / Linux installers (Phase G targets cross-platform via Tauri)
 - `ev why` audit query tool
+- File-system watcher (Phase G)
+- Skill eval harness / golden datasets (Phase G)
+- Structured observability / cost tracing (Phase G)
+
+**Items originally here but shipped in Phase F:**
+- ✅ Local STT/TTS (faster-whisper / Kokoro / pyttsx3)
+- ✅ OS keyring / encrypted secrets store (`ev.secrets`)
+- ✅ Auto-updater (`ev.updater`, read-only)
 
 ---
 
@@ -206,15 +214,15 @@ Responsibilities:
 
 ## 6. Acceptance criteria
 
-- [ ] `python scripts/build_installer.py` produces a runnable `dist/Hi-EV.exe`.
-- [ ] Running `Hi-EV.exe` on a clean Windows machine opens the browser to the setup wizard if `.env` is missing.
-- [ ] Setup wizard writes `.env`, restarts the daemon, and the HUD becomes usable.
-- [ ] Without an LLM key, the HUD shows a friendly read-only/fallback message instead of crashing.
-- [ ] Tray icon, global hotkey (`Ctrl+Alt+E`), and wake word still work.
-- [ ] `python -m pytest` passes (target: 197+ passed, 1 skipped, no new skips).
-- [ ] `ruff check .` clean.
-- [ ] `cd web && npm run build` clean.
-- [ ] README and memory files updated.
+- ✅ `python scripts/build_installer.py` produces a runnable `dist/Hi-EV.exe`.
+- ✅ Running `Hi-EV.exe` on a clean Windows machine opens the browser to the setup wizard if `.env` is missing.
+- ✅ Setup wizard writes `.env`, restarts the daemon, and the HUD becomes usable.
+- ✅ Without an LLM key, the HUD shows a friendly read-only/fallback message instead of crashing.
+- ✅ Tray icon, global hotkey (`Ctrl+Alt+E`), and wake word still work.
+- ✅ `python -m pytest` passes (253 passed, 1 skipped, no new skips).
+- ✅ `ruff check .` clean.
+- ✅ `cd web && npm run build` clean.
+- ✅ README and memory files updated.
 
 ---
 
@@ -231,11 +239,9 @@ Responsibilities:
 
 ---
 
-## 8. Next actions (implementation order)
+## 8. Next actions / follow-up
 
-1. **Stream 2 first** — setup wizard backend + frontend. This unblocks everything else because it removes the manual `.env` requirement.
-2. **Stream 1** — desktop presence entry point.
-3. **Stream 4** — graceful missing-key fallback.
-4. **Stream 3** — PyInstaller build script.
-5. **Stream 5** — docs and memory updates.
-6. **Final verification** — full test suite, build, and manual smoke test.
+Phase E is complete. Phase F added local voice, skills, sandbox, eval runner, encrypted secrets, and auto-updater. Phase G is next.
+
+- [Phase F — Plugin Architecture, Skills, Voice, and Auto-Updater](2026-10-03-phase-f-plugin-architecture.md)
+- [Phase G roadmap](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md#phase-g--tauri-desktop-wrapper-richer-os-presence-skill-evals-cloud-relay-observability-active)

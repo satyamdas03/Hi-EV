@@ -42,6 +42,17 @@ The Hi-EV backend is solid through Phase 3 (82 tests passing, Gmail/Calendar liv
 ## Post-MVP updates
 
 - **Streaming response UI (Phase B):** `web/src/ui/Chat.tsx` now renders streaming deltas with an animated caret, phase badge, and a stop button; backend supports `type: stop` abort.
+- **Persistent chat threads + proactive alerts (Phase C):** Threads and alerts panels added; WebSocket pushes `type: alert` and thread CRUD works across reconnects.
+- **T2 confirmation + desktop hotkey/tray (Phase D):** `ConfirmModal.tsx`, `POST /focus`, `scripts/global_hotkey.py`, `scripts/tray_widget.py`, browser wake word.
+- **Local installer + setup wizard (Phase E):** `scripts/desktop_presence.py` unified entry point, `GET/POST /setup`, `SetupWizard.tsx`, PyInstaller build script.
+- **Local voice pipeline + skills + sandbox + eval + secrets + auto-updater (Phase F):**
+  - `ev.voice` with mock/faster-whisper/kokoro/pyttsx3 backends and `VoiceManager`.
+  - `scripts/desktop_presence.py` now uses `VoiceManager` for the global-hotkey voice loop.
+  - `ev.skills` runtime discovers `SKILL.md` files and exposes them as tools; `GET /skills` and `ev skills list`.
+  - `ev.sandbox` + `SandboxTool` for safe code execution with AST whitelist and subprocess isolation.
+  - `ev.eval` reusable eval runner with checks, JSON/YAML loader, and `ev eval run` CLI.
+  - `ev.secrets` encrypted vault backed by OS keyring or `EV_MASTER_PASSWORD`.
+  - `ev.updater` read-only GitHub releases comparator; `ev update [--repo owner/repo]`.
 
 ## Order of work
 
@@ -194,10 +205,14 @@ The Hi-EV backend is solid through Phase 3 (82 tests passing, Gmail/Calendar liv
 
 ## Follow-up work (post-MVP)
 
-- True wake word (Porcupine WASM) replacing push-to-talk.
-- Local faster-whisper STT + Piper/Kokoro TTS.
-- Server-initiated proactive alerts over WebSocket.
-- Model-authored HTML panels/blades with a Python sanitiser.
-- SSRF-safe media proxy in Python for images and article reader mode.
-- Hand tracking and touchless gestures.
-- Persistent conversation history in Postgres.
+Completed or in progress in later phases:
+
+- ✅ True wake word (Porcupine WASM) replacing push-to-talk — browser wake word remains; global wake word is Phase G.
+- ✅ Local faster-whisper STT + Kokoro/pyttsx3 TTS — shipped in Phase F via `ev.voice`.
+- ✅ Server-initiated proactive alerts over WebSocket — shipped in Phase C.
+- ✅ Persistent conversation history — shipped in Phase C.
+- ⏳ Model-authored HTML panels/blades with a Python sanitiser — Phase G.
+- ⏳ SSRF-safe media proxy in Python for images and article reader mode — Phase G.
+- ⏳ Hand tracking and touchless gestures — Phase G+.
+- ✅ Local installer + unified desktop presence entry point — shipped in Phases E/F.
+- ✅ Encrypted secrets vault + read-only auto-updater — shipped in Phase F.

@@ -1,10 +1,9 @@
 """Tests for the Phase F plugin registry and skill scaffolding."""
 
-from pathlib import Path
 
 import pytest
 
-from ev.core import RegistryBase, discover_all, register, registry
+from ev.core import RegistryBase, registry
 from ev.core.component import AgentContext, BaseTool
 from ev.skills.manager import SkillManager
 from ev.skills.parser import parse_skill_file

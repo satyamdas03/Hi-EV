@@ -18,7 +18,10 @@ from typing import Any
 
 # We only import from the local sandbox package; the parent process ensures
 # PYTHONPATH points at the project so this works in dev and installed builds.
-from ev.sandbox.policy import BANNED_BUILTINS, DEFAULT_ALLOWED_IMPORTS, SandboxError, SandboxPolicy
+from ev.sandbox.policy import (
+    DEFAULT_ALLOWED_IMPORTS,
+    SandboxPolicy,
+)
 
 
 def _restricted_import(name: str, globals_=None, locals_=None, fromlist=(), level: int = 0):
@@ -59,7 +62,7 @@ def run(code: str, inputs: dict | None = None) -> dict[str, Any]:
         compiled = compile(code, "<sandbox>", "exec")
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             exec(compiled, safe_globals)  # noqa: S102
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         exc_info = traceback.format_exc()
 
     return {

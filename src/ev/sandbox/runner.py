@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from ev.sandbox.policy import SandboxError, SandboxPolicy
+
+logger = logging.getLogger(__name__)
 
 
 class CodeRunner:
@@ -41,8 +44,8 @@ class CodeRunner:
 
             ev_root = str(Path(ev.__file__).resolve().parent.parent)
             env["PYTHONPATH"] = ev_root + os.pathsep + env.get("PYTHONPATH", "")
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Could not add ev package to sandbox PYTHONPATH: %s", exc)
 
         inputs_path: str | None = None
         output_path: str | None = None
@@ -70,6 +73,7 @@ class CodeRunner:
                 capture_output=True,
                 timeout=self.timeout,
                 env=env,
+                check=False,
             )
 
             if proc.returncode != 0:
@@ -121,5 +125,5 @@ class CodeRunner:
                 if path:
                     try:
                         os.unlink(path)
-                    except Exception:  # noqa: BLE001
-                        pass
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("Could not remove sandbox temp file %s: %s", path, exc)

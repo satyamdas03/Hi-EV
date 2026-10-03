@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 
 from ev.config import Settings, get_settings
 from ev.skills.parser import parse_skill_file

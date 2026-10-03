@@ -1,19 +1,19 @@
 # Hi-EV — Honest State Assessment and Roadmap to the Full Vision
 
-> **Date:** 2026-09-22 (updated)
-> **Commit:** `92ff90d`
-> **Tests:** 197 passed, 1 skipped
+> **Date:** 2026-10-03 (updated)
+> **Commit:** `02781e2`
+> **Tests:** 253 passed, 1 skipped
 > **Ruff:** clean
 > **Frontend build:** clean
-> **Status:** Web/Voice/HUD MVP complete. Phases A–D complete and pushed to `origin/main`. Phase E — Local Voice + Advanced HUD + Self-Expansion is next.
+> **Status:** Web/Voice/HUD MVP complete. Phases A–F complete and pushed to `origin/main`. Phase G — Tauri wrapper, richer OS presence, skill evals, cloud relay, observability — is next.
 
 ---
 
 ## 1. Executive summary
 
-Hi-EV has gone from a README vision to a working local daemon with a browser-native voice/HUD face. The core is real: FastAPI daemon, SQLAlchemy memory, tiered tool registry, personal-only security boundary, GitHub/notes/Gmail/Calendar ingestion, and a React/Three.js frontend that can hear you and answer via WebSocket.
+Hi-EV has gone from a README vision to a working local daemon with a browser-native voice/HUD face and a desktop presence entry point. The core is real: FastAPI daemon, SQLAlchemy memory, tiered tool registry, OpenJarvis-style plugin registry/ABCs, skills runtime, local voice pipeline, personal-only security boundary, GitHub/notes/Gmail/Calendar ingestion, safe code sandbox, eval runner, encrypted secrets vault, read-only auto-updater, and a React/Three.js frontend that can hear you and answer via WebSocket.
 
-That is a genuine milestone. But against the full vision — *ambient executive layer that wakes up before you do, knows every project and commitment, and acts autonomously within safe tiers* — we are now at roughly **Phase 4 of 5+**.
+That is a genuine milestone. But against the full vision — *ambient executive layer that wakes up before you do, knows every project and commitment, and acts autonomously within safe tiers* — we are now at roughly **Phase 5 of 6+**.
 
 This document is an honest inventory of what works, what is half-built, what is missing, and the shortest credible path from here to the vision.
 
@@ -29,7 +29,9 @@ This document is an honest inventory of what works, what is half-built, what is 
 | Schema migrations (Alembic) | ✅ Working | Base migration `aacdc9089a90` is frozen. New `document_chunks` migration `e65cfe42f3a6` added. Migration discipline documented in `docs/development/migrations.md`. |
 | Lifespan + alert loop | ✅ Working | Background loop scans deadlines and pushes `type: alert` events to all active WebSockets; morning brief scheduler fires at configured time. |
 | Persistent chat threads | ✅ Working | `ChatThread`/`ChatTurn` models, REST CRUD, resume across reconnects, 20-turn rolling window. |
-| Settings / `.env` | ✅ Working | Pydantic settings, env-file driven, personal-only flag enforced, Phase D desktop flags added. |
+| Settings / `.env` | ✅ Working | Pydantic settings, env-file driven, personal-only flag enforced, Phase D/E/F flags added. |
+| Encrypted secrets vault | ✅ Working | `ev.secrets` stores encrypted key/value pairs; key from OS keyring or `EV_MASTER_PASSWORD`; loaded before pydantic reads env. |
+| Read-only auto-updater | ✅ Working | `ev.updater` compares against GitHub releases and prints installer URL; never downloads/runs code without user confirmation. |
 
 ### 2.2 Memory / structured facts
 | Component | Status | Notes |
@@ -39,7 +41,7 @@ This document is an honest inventory of what works, what is half-built, what is 
 | Vector / semantic document memory | ✅ Working | `DocumentChunk` model, sqlite-vec vector table, local embeddings, chunking pipeline, hybrid search, `memory_search` tool, and `ev remember` command are implemented. |
 | Episodic log queryability | ⚠️ Partial | `Event` table exists; chat turns are persisted, but no `ev why` retrieval tool or reasoning over history. |
 | Cross-project synthesis | ⚠️ Partial | `brief` aggregates; true synthesis across people/obligations/decisions is hand-rolled, not systematic. |
-| Preference memory | ❌ Missing | No tracking of ignored reminders, preferred answer length, or voice speed.
+| Preference memory | ❌ Missing | No tracking of ignored reminders, preferred answer length, or voice speed. |
 
 ### 2.3 Ingestion
 | Source | Status | Notes |
@@ -73,6 +75,8 @@ This document is an honest inventory of what works, what is half-built, what is 
 | `remember` explicit capture | T1 | ✅ `ev remember "..."` and `POST /remember` implemented; stores as `DocumentChunk`. |
 | `kill-switch` | T3 guard | ❌ Not implemented. |
 | Tier enforcement in WebSocket | ✅ | T2 pauses for `confirm`/`confirm_response`; T3 hard-blocked in web/voice. |
+| Sandbox tool (code execution) | T2 | ✅ `ev.sandbox` + `SandboxTool` shipped in Phase F; tier-2 confirmation required. |
+| Skills runtime | ✅ | `ev.skills` discovers `SKILL.md` files and exposes each as a tool via `SkillTool`. |
 
 ### 2.5 LLM / reasoning
 | Capability | Status | Notes |
@@ -82,7 +86,7 @@ This document is an honest inventory of what works, what is half-built, what is 
 | Chat / direct answer fallback | ✅ Working | General conversation via LLM; fast path streams. |
 | Streaming responses | ✅ Working | `LLMClient.complete_stream()` yields deltas; WebSocket fast-chat path streams word-by-word with stop control. |
 | Reasoning router | ✅ Working | Heuristic fast/agent/deliberate classifier with optional LLM fallback; emits `phase: route:<path>`. |
-| Eval harness / golden questions | ✅ Working | `tests/eval/` with seeded fixtures, judge, per-category evals, `scripts/run_eval.py` report. |
+| Eval harness / golden questions | ✅ Working | `ev.eval` suite runner with checks, JSON/YAML loader, and `ev eval run [suite_dir]` CLI. |
 | Prompt injection guard | ✅ Working | `Guard.check()` with SAFE/CAUTION/BLOCKED; runs before routing; source-trust tier downgrades for untrusted content. |
 
 ### 2.6 Voice / HUD frontend
@@ -94,13 +98,12 @@ This document is an honest inventory of what works, what is half-built, what is 
 | WebSocket bridge | ✅ Working | Auto-reconnect, delta/done/error/phase/confirm/focus/alert events. |
 | Browser SpeechRecognition STT | ✅ Working | Push-to-talk via Space; continuous wake-word listener for "hey ev". |
 | Browser speechSynthesis TTS | ✅ Working | Sentence queue, barge-in. |
-| Local wake word | ⚠️ Browser | Browser Web Speech API continuous recognition for "hey ev"; local Porcupine/openWakeWord moved to Phase E. |
-| Local STT (Whisper) | ❌ Missing | Browser API only. |
-| Local TTS (Piper/Kokoro) | ❌ Missing | Browser API only. |
+| Local STT (faster-whisper) | ✅ Working | `ev.voice` with `faster_whisper` backend shipped in Phase F; mock backend for CI. |
+| Local TTS (Kokoro/pyttsx3) | ✅ Working | `ev.voice` with `kokoro` and `pyttsx3` backends shipped in Phase F; mock backend for CI. |
 | Persistent chat history | ✅ Working | Chat threads persist across reconnects; thread CRUD in UI. |
 | Proactive server→client alerts | ✅ Working | `_alert_loop` pushes `type: alert` to all WebSockets. |
 | HTML blades / model-authored panels | ❌ Missing | Text responses only. |
-| System tray / desktop widget | ⚠️ Skeleton | `scripts/global_hotkey.py` (Ctrl+Alt+E) + `scripts/tray_widget.py` (pystray); not yet packaged as single entry point. |
+| System tray / desktop widget | ✅ Working | `scripts/desktop_presence.py` is the single entry point: daemon launch, global hotkey, tray widget, voice loop. |
 
 ### 2.7 Security / safety
 | Component | Status | Notes |
@@ -112,7 +115,7 @@ This document is an honest inventory of what works, what is half-built, what is 
 | Source-trust tier downgrade | ✅ Working | Untrusted ingested content auto-downgrades effective tool tier. |
 | Kill switch | ❌ Missing | Not implemented. |
 | Audit log queryable | ⚠️ Partial | Events logged; no `ev audit` command. |
-| Secrets in OS keyring | ❌ Missing | In `.env` only. |
+| Secrets in OS keyring / encrypted vault | ✅ Working | `ev.secrets` with `cryptography.fernet`; OS keyring via `keyring`, password fallback via `EV_MASTER_PASSWORD`. |
 | mTLS to cloud relay | ❌ N/A | No relay yet. |
 
 ---
@@ -122,19 +125,19 @@ This document is an honest inventory of what works, what is half-built, what is 
 | # | Superpower | Maturity | Honest verdict |
 |---|------------|----------|----------------|
 | 1 | Ambient awareness | 7/10 | Background ingestion scheduler polls notes, GitHub, Gmail, Calendar; long-form content is chunked, embedded, and indexed. File-system watcher and webhook ingress remain future work. |
-| 2 | Voice-first command | 6/10 | Browser voice loop works end-to-end; wake word "hey ev" works in browser. Local STT/TTS still pending. |
+| 2 | Voice-first command | 8/10 | Browser voice loop works end-to-end; desktop voice loop via `scripts/desktop_presence.py` uses local faster-whisper/Kokoro/pyttsx3; wake word still browser-based. |
 | 3 | Project memory | 8/10 | Structured facts + document chunks + hybrid search; router/eval measure retrieval quality. No deep dossier reasoning yet. |
-| 4 | Autonomous execution | 7/10 | Tiered enforcement works: T0/T1 auto-run, T2 confirms in web/voice/CLI, T3 hard-blocked. Tool-authoring loop not started. |
+| 4 | Autonomous execution | 7/10 | Tiered enforcement works: T0/T1 auto-run, T2 confirms in web/voice/CLI, T3 hard-blocked. Sandbox tool and skills runtime shipped. |
 | 5 | Cross-project synthesis | 6/10 | Memory snippets surface across tools; brief aggregates. True synthesis across commitments/people is still hand-rolled. |
 | 6 | Proactive alerts | 7/10 | WebSocket push alerts, morning brief scheduler, Telegram skeleton; no phone/email fallback yet. |
 | 7 | Conversation continuity | 8/10 | Persistent chat threads across reconnects and reloads; no preference learning yet. |
-| 8 | Tool-authoring loop | 0/10 | Not started. |
+| 8 | Tool-authoring loop | 2/10 | Skills runtime lets prompt-based capabilities be added via `SKILL.md`; self-authoring Python tools not yet implemented. |
 | 9 | Holographic HUD | 4/10 | Visual shell + chat/alerts/thread panels; still text-only, no model-authored blades or gaze/click UI. |
-| 10 | Local, private, inspectable | 6/10 | Runs local, memory local, provenance attached to ingest, guard + tier enforcement. No `ev why`, no kill switch, no audit query UI, secrets still in `.env`. |
+| 10 | Local, private, inspectable | 7/10 | Runs local, memory local, provenance attached to ingest, guard + tier enforcement, encrypted secrets vault. No `ev why`, no kill switch, no audit query UI, no structured observability. |
 
-**Average maturity: ~5.9/10.**
+**Average maturity: ~6.4/10.**
 
-Phases A–D closed the core operating-system layer. EV is now ambient, measurable, proactive, persistent, and safely autonomous. Phase E will make it fully local-voice and self-expanding.
+Phases A–F closed the core operating-system layer and added plugin extensibility, local voice, sandboxed code execution, evals, encrypted secrets, and an auto-updater. EV is now ambient, measurable, proactive, persistent, safely autonomous, and extensible. Phase G will wrap it in a native desktop shell and add cloud ingress/observability.
 
 ---
 
@@ -150,7 +153,7 @@ Ingestion is still primarily scheduler-driven. The vision requires EV to *watch*
 `ev.reasoning.router` now classifies requests into fast/agent/deliberate paths and is integrated into the WebSocket chat path. Cost/latency budgets and deeper deliberation loops remain future polish.
 
 ### Gap 4: Eval harness — CLOSED
-`tests/eval/` and `scripts/run_eval.py` provide golden-question evals for status, memory, research, prep, and guard refusal with correctness, latency, and cost metrics.
+`ev.eval` provides a reusable eval runner with checks, JSON/YAML loaders, and CLI reporting. Golden datasets and skill eval harness remain Phase G work.
 
 ### Gap 5: Proactive loop — CLOSED
 The alert loop now pushes `type: alert` events to all active WebSockets. A morning brief scheduler fires at the configured time. Telegram relay skeleton is wired but disabled by default; phone/email fallback remains future work.
@@ -161,20 +164,20 @@ T2 actions pause for a `type: confirm` message and wait for `confirm_response` i
 ### Gap 7: Persistent conversation — CLOSED; preference memory remains
 Chat threads persist across reconnects and page reloads. EV does not yet learn from ignored reminders or preferred answer length/voice speed.
 
-### Gap 8: Desktop presence — SKELETON COMPLETE
-Global hotkey (`Ctrl+Alt+E`), system-tray widget skeleton (`pystray`), and browser wake word ("hey ev") are implemented. They are not yet packaged as a single installable desktop entry point.
+### Gap 8: Desktop presence — CLOSED
+`scripts/desktop_presence.py` is the single installable entry point: it launches the daemon, global hotkey, system tray, and (when voice is enabled) a local voice loop.
 
-### Gap 9: No local STT/TTS
-Voice still depends on browser SpeechRecognition and speechSynthesis. A true ambient assistant needs local faster-whisper + Piper/Kokoro so it works offline and with lower latency.
+### Gap 9: Local STT/TTS — CLOSED
+`ev.voice` ships with mock, faster-whisper, kokoro, and pyttsx3 backends selected by config. The browser still provides a zero-install fallback, but the local pipeline works offline.
 
-### Gap 10: No tool-authoring loop, structured observability, or encrypted secrets
-EV cannot yet propose and grow its own tools, trace cost/latency/audit in one place, or store tokens outside `.env`.
+### Gap 10: Tool self-authoring, structured observability, cloud relay
+EV cannot yet propose and grow its own Python tools, trace cost/latency/audit in one place, or receive webhooks from a cloud relay. These are the core of Phase G.
 
 ---
 
 ## 5. Roadmap from today to the vision
 
-We propose **five phases**, each with a clear deliverable and acceptance criteria. The phases are ordered by dependency and user-facing impact.
+We propose **six phases**, each with a clear deliverable and acceptance criteria. The phases are ordered by dependency and user-facing impact.
 
 ### Phase A — Ambient Ingestion + Semantic Memory ✅ COMPLETE (`40aaa2b`, 2026-09-17)
 **Goal:** EV keeps itself up to date and can answer questions over documents, not just structured rows.
@@ -270,29 +273,71 @@ We propose **five phases**, each with a clear deliverable and acceptance criteri
 - ✅ Push to `main`/destructive intents are refused regardless of prompt or voice command.
 - ✅ Hotkey (`Ctrl+Alt+E`) activates EV from any app; browser wake word ("hey ev") triggers listening.
 
-### Phase E — Local Voice + Advanced HUD + Self-Expansion (6+ weeks)
-**Goal:** Full local-first voice, holographic information space, and the ability to grow its own tools.
+### Phase E — Launch MVP (Local Installer + Setup Wizard) ✅ COMPLETE (commit `f304bb5` area through `02781e2`, 2026-10-02)
+**Goal:** Ship a launch-ready, local-only Hi-EV that a non-technical user can download, install, and run on Windows without writing `.env` files or opening a terminal.
 
 **Deliverables:**
-1. Local STT/TTS:
-   - faster-whisper for transcription.
-   - Piper or Kokoro for TTS.
-2. Model-authored HTML blades:
-   - Sanitized, schema-constrained panels for status, deadlines, prep.
-   - Python sanitizer; no arbitrary JS.
-3. Hand tracking / gaze-driven UI (optional).
-4. Tool-authoring loop:
-   - EV proposes a new tool from description.
-   - Generates Python + test + registers it.
-   - Human approval before activation.
-5. Self-tuning:
-   - Tracks which summaries were ignored vs acted on.
-   - Tunes retrieval thresholds and alert frequency.
+- Unified desktop entry point `scripts/desktop_presence.py`.
+- First-run setup wizard backend (`GET /setup`, `POST /setup`) and frontend `SetupWizard.tsx`.
+- Graceful missing-LLM-key fallback in chat handler.
+- Windows installer build script (`scripts/build_installer.py`) producing a portable `dist/Hi-EV.exe`.
+- Documentation and memory files updated.
 
 **Acceptance criteria:**
-- Voice works with no cloud dependency for common queries.
-- EV can display a deadline as a clickable blade with source links.
-- A new tool can be added from a one-paragraph description in under 10 minutes.
+- ✅ `python scripts/build_installer.py` produces a runnable `dist/Hi-EV.exe`.
+- ✅ Running `Hi-EV.exe` on a clean Windows machine opens the browser to the setup wizard if `.env` is missing.
+- ✅ Setup wizard writes `.env`, restarts the daemon, and the HUD becomes usable.
+- ✅ Without an LLM key, the HUD shows a friendly read-only/fallback message instead of crashing.
+- ✅ Tray icon, global hotkey (`Ctrl+Alt+E`), and wake word still work.
+- ✅ `python -m pytest` passes (197+ passed, 1 skipped).
+- ✅ `ruff check .` clean.
+- ✅ `cd web && npm run build` clean.
+- ✅ README and memory files updated.
+
+### Phase F — Plugin Architecture, Skills, Voice, Sandbox, Eval, Secrets, Auto-Updater ✅ COMPLETE (`02781e2`, 2026-10-03)
+**Goal:** Turn Hi-EV from a hardcoded tool list into an extensible personal AI OS with local voice, safe code execution, and encrypted secrets.
+
+**Deliverables:**
+- OpenJarvis-style plugin registry/ABCs (`ev.core.registry`, `ev.core.component`, `ev.core.discovery`).
+- All existing tools converted to `@register("tool", ...)` decorators.
+- Skills runtime (`ev.skills`) loading `SKILL.md` files as tools.
+- Local voice pipeline (`ev.voice`) with mock/faster-whisper/kokoro/pyttsx3 backends and `VoiceManager`.
+- Desktop presence voice loop: hotkey triggers record → transcribe → `POST /voice/chat` → synthesize.
+- Safe code sandbox (`ev.sandbox` + `SandboxTool`) with AST whitelist and subprocess isolation.
+- Eval runner abstraction (`ev.eval`) with checks, JSON/YAML loader, and CLI.
+- Encrypted secrets vault (`ev.secrets`) backed by `cryptography.fernet` and OS keyring.
+- Read-only auto-updater (`ev.updater` + `ev update`).
+- Single `scripts/desktop_presence.py` entry point for daemon, hotkey, tray, and voice.
+
+**Verification:**
+- `python -m pytest` → **253 passed, 1 skipped**.
+- `ruff check .` → clean.
+- `cd web && npm run build` → clean.
+- Commit `02781e2` pushed to `origin/main`.
+
+### Phase G — Tauri Desktop Wrapper, Richer OS Presence, Skill Evals, Cloud Relay, Observability (active)
+**Goal:** Wrap EV in a native desktop shell, deepen OS-level presence, measure skill quality, add cloud/webhook ingress, and trace cost/latency/audit.
+
+**Deliverables:**
+1. Tauri desktop wrapper and cross-platform installers (Windows, macOS, Linux).
+2. Richer OS-level presence:
+   - Global wake word (Porcupine/openWakeWord) outside the browser.
+   - Desktop capture / screenshot ingestion.
+   - Intent bridging from OS notifications and share sheets.
+3. File-system watcher for notes vault and project directories.
+4. Skill eval harness and example golden datasets.
+5. Cloud relay / webhook ingress for Telegram, GitHub webhooks, and future phone/email fallback.
+6. Observability / cost tracing:
+   - Structured logging (OpenTelemetry or JSON).
+   - Per-request cost/latency/audit traces.
+   - `ev why` audit query tool.
+
+**Acceptance criteria:**
+- Native desktop app installs and runs without a browser tab.
+- A webhook from GitHub or Telegram reaches the local daemon through a minimal cloud relay.
+- Skill eval suite produces pass/fail reports with per-skill latency.
+- Cost/latency traces are queryable for any chat turn.
+- Full test suite still passes; ruff clean; frontend build clean.
 
 ---
 
@@ -302,9 +347,9 @@ We propose **five phases**, each with a clear deliverable and acceptance criteri
 2. **Work blocklist is hardcoded — RESOLVED.** Blocklist is config-driven via `EV_BLOCKED_HANDLES` / `EV_BLOCKED_DOMAINS`.
 3. **Claude Code spawn is fragile.** `work_on` pipes context into stdin of `claude code`; the CLI likely ignores it. Move to a context file or dedicated launch protocol.
 4. **Redis assumed but optional.** Research tool degrades gracefully, but other features may assume Redis. Make Redis optional everywhere or document it as required.
-5. **Secrets in `.env` — STILL OPEN.** Move to OS keyring or encrypted store in Phase E.
-6. **No structured logging / observability — STILL OPEN.** Add OpenTelemetry or structured logs for cost/latency/audit tracing in Phase E.
-7. **Desktop presence not packaged.** Hotkey, tray, and wake-word scripts are separate; create a single `scripts/desktop_presence.py` entry point in Phase E.
+5. **Secrets in `.env` — RESOLVED.** `ev.secrets` stores encrypted key/value pairs; OS keyring via `keyring`, password fallback via `EV_MASTER_PASSWORD`.
+6. **No structured logging / observability — STILL OPEN.** Add OpenTelemetry or structured logs for cost/latency/audit tracing in Phase G.
+7. **Desktop presence not packaged — RESOLVED.** `scripts/desktop_presence.py` is the single entry point for daemon launch, hotkey, tray, and voice loop.
 
 ---
 
@@ -319,27 +364,31 @@ We propose **five phases**, each with a clear deliverable and acceptance criteri
 | Patent/IP leakage through email/web ingestion | High | Privacy classifier, forbidden tag, blocklist, kill switch, personal-only enforcement. |
 | Local LLM too slow for real-time voice | Medium | Keep cloud STT/TTS as fallback; classify locally, synthesize locally when fast enough. |
 | Frontend build breaks on Node version drift | Low | Pin Node version, CI build check. |
+| Plugin registry accidentally loads unsafe modules | Medium | Discovery only imports known `ev.*` packages; skills are prompt-based and sandboxed. |
+| Auto-updater social-engineering risk | Medium | Read-only comparator; never downloads or runs installers without explicit user confirmation. |
 
 ---
 
 ## 8. What to build next (recommended immediate sprint)
 
-Phases A–D are complete. The next highest-leverage work is **Phase E — Local Voice + Advanced HUD + Self-Expansion** so EV works offline by voice, displays model-authored information blades, and can grow its own tools.
+Phases A–F are complete. The next highest-leverage work is **Phase G — Tauri Desktop Wrapper, Richer OS Presence, Skill Evals, Cloud Relay, and Observability** so EV works as a native desktop app, watches the file system, accepts webhooks, and traces its own cost/latency/audit.
 
-**Sprint goal:** Local STT/TTS replaces browser Speech APIs, the desktop presence scripts are packaged into one entry point, EV renders its first HTML blade, and a tool-authoring prototype generates a tool + test from a description.
+**Sprint goal:** Tauri wrapper replaces the browser-only HUD, a file-system watcher refreshes notes, a skill eval harness measures skill quality, a minimal cloud relay forwards webhooks, and the first cost/latency traces are queryable.
 
 **Tasks:**
-1. Local STT/TTS pipeline: faster-whisper + Piper or Kokoro, replacing browser SpeechRecognition/speechSynthesis.
-2. Package desktop presence: single `scripts/desktop_presence.py` entry point that launches hotkey listener, tray widget, and optional wake-word detector.
-3. HTML blade renderer: sanitized, schema-constrained panels for status, deadlines, prep; Python sanitizer blocks arbitrary JS.
-4. Tool-authoring loop prototype: generate Python tool + test from a one-paragraph description; human approval before registration.
-5. Move secrets out of `.env` into OS keyring or encrypted store.
+1. Tauri shell: native window wrapping `web/dist/`, system tray, global shortcut, installers.
+2. File-system watcher: watch `notes_path` and active project directories for changes, ingest automatically.
+3. Global wake word: Porcupine or openWakeWord running in the Tauri/desktop process.
+4. Desktop capture: ingest screenshots/diagrams into document memory.
+5. Skill eval harness: golden datasets for built-in skills, pass/fail reporter.
+6. Cloud relay / webhook ingress: minimal queueing relay for GitHub/Telegram while laptop sleeps.
+7. Observability: JSON-structured logs, per-request cost/latency/audit trace, `ev why` query tool.
 
 **Acceptance criteria:**
-- Voice query works with no cloud dependency for common queries.
-- `scripts/desktop_presence.py` launches and surfaces tray + hotkey focus.
-- EV displays a deadline as a clickable blade with source links.
-- A new tool can be added from a one-paragraph description in under 10 minutes.
+- Native app launches without a browser tab.
+- Adding a file to the notes vault is reflected in memory within minutes.
+- A GitHub webhook reaches the daemon via the relay and creates an ingest record.
+- Skill eval suite produces a report with per-skill pass rate and latency.
 - Full test suite still passes; ruff clean; frontend build clean.
 
 ---
@@ -359,6 +408,8 @@ Phases A–D are complete. The next highest-leverage work is **Phase E — Local
 
 ## 10. Conclusion
 
-Hi-EV is no longer a sketch. The daemon runs, the voice/HUD face works, and the first tools answer real questions from real memory. But the system is still *reactive* and *manual*. The path to the vision runs through making EV **continuously aware**, **semantically literate**, **measurable**, **proactive**, and **safely autonomous** — in that order.
+Hi-EV is no longer a sketch. The daemon runs, the voice/HUD face works, the desktop presence entry point launches daemon + hotkey + tray + voice, and the first tools answer real questions from real memory. The system is also now extensible: new tools, skills, voice backends, and eval cases can be added without editing core code.
 
-The good news: every one of those capabilities can be built incrementally on the existing scaffold. The bad news: there is no shortcut. The next milestone is not another UI polish; it is making EV fully local-voice, self-expanding, and present on the desktop without a browser tab.
+But the system is still *reactive* and *manual* in key ways. The path to the vision runs through making EV **continuously aware** (file-system/webhook ingestion), **natively present** (Tauri wrapper, global wake word, desktop capture), **measurable at the skill level**, and **observable** (cost/latency/audit tracing) — in that order.
+
+The good news: every one of those capabilities can be built incrementally on the existing scaffold. The bad news: there is no shortcut. The next milestone is not another UI polish; it is making EV a native desktop app that watches the filesystem, receives webhooks, and explains its own decisions.

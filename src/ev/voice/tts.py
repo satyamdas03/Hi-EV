@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from ev.core import register
 from ev.voice.component import BaseTTSBackend
@@ -46,7 +47,7 @@ class KokoroTTS(BaseTTSBackend):
             audio_segments.append(audio)
         if not audio_segments:
             raise VoiceBackendError("Kokoro produced no audio")
-        import numpy as np  # noqa: ICN001
+        import numpy as np
 
         full_audio = np.concatenate(audio_segments)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -82,7 +83,7 @@ class MockTTS(BaseTTSBackend):
     name = "mock"
 
     async def synthesize(self, text: str, output_path: Path | None = None, voice: str | None = None) -> Path:
-        import numpy as np  # noqa: ICN001
+        import numpy as np
 
         output_path = output_path or Path("tmp_tts.wav")
         output_path.parent.mkdir(parents=True, exist_ok=True)

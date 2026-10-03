@@ -6,11 +6,11 @@ EV is not a chatbot. It is the persistent operating system for a single human �
 
 ## Current status
 
-- **Phases A–D are complete and pushed to `origin/main`.**
-- **Phase E Launch MVP is complete:** local Windows installer, first-run setup wizard, packaged desktop entry point, and graceful missing-LLM-key fallback.
-- **Tests:** 203 passed, 1 skipped; **ruff:** clean; **frontend build:** clean.
-- **Live smoke test:** Phase D confirmation flow verified end-to-end against the running daemon on `127.0.0.1:7345`.
-- **Phase E v1.1** (local STT/TTS, HTML blades, tool self-authoring, OS keyring, auto-updater) is next.
+- **Phases A–F are complete and pushed to `origin/main`.**
+- **Phase F** added the OpenJarvis-style plugin architecture, skills runtime, local voice pipeline (`ev.voice`), safe code sandbox (`ev.sandbox`), eval runner abstraction (`ev.eval`), encrypted secrets vault (`ev.secrets`), and read-only auto-updater (`ev.updater`).
+- **Tests:** 253 passed, 1 skipped; **ruff:** clean; **frontend build:** clean.
+- **Latest commit:** `02781e2` — auto-updater, desktop presence rewrite, proactive test isolation.
+- **Phase G** (Tauri wrapper, cross-platform installers, file-system watcher, richer OS presence, skill golden datasets, cloud relay) is next.
 
 ---
 
@@ -64,6 +64,8 @@ EV is not a chatbot. It is the persistent operating system for a single human �
 │   │  • ingestion orchestrator                                    │          │
 │   │  • memory router / retrieval                                 │          │
 │   │  • reasoning router (fast / agent / deliberate)              │          │
+│   │  • plugin registry + skill runtime                           │          │
+│   │  • safe sandbox + eval harness                               │          │
 │   │  • tool registry with tier enforcement                       │          │
 │   │  • action audit + cost/latency tracking                       │          │
 │   └──────────────────────┬───────────────────────────────────────┘          │
@@ -71,14 +73,16 @@ EV is not a chatbot. It is the persistent operating system for a single human �
 │          ┌───────────────┼───────────────┐                                 │
 │          ▼               ▼               ▼                                 │
 │   ┌──────────┐    ┌──────────┐    ┌──────────────┐                        │
-│   │ SQLite   │    │ Local    │    │ Tool Registry │                        │
-│   │ +sqlite- │    │ Redis    │    │  - git / gh   │                        │
-│   │ vec      │    │ cache    │    │  - Claude Code│                        │
+│   │ SQLite   │    │ Encrypted│    │ Tool Registry │                        │
+│   │ +sqlite- │    │ secrets  │    │  - git / gh   │                        │
+│   │ vec      │    │ vault    │    │  - Claude Code│                        │
 │   │          │    │          │    │  - pytest     │                        │
-│   │ structured│    │ rate     │    │  - shell      │                        │
-│   │ docs     │    │ limits   │    │  - browser    │                        │
-│   │ episodic │    │          │    │  - calendar   │                        │
-│   └──────────┘    └──────────┘    └──────────────┘                        │
+│   │ structured│    │ Local    │    │  - shell      │                        │
+│   │ docs     │    │ Redis    │    │  - browser    │                        │
+│   │ episodic │    │ cache    │    │  - calendar   │                        │
+│   └──────────┘    └──────────┘    │  - skills     │                        │
+│                                   │  - voice      │                        │
+│                                   └──────────────┘                        │
 │                                                                              │
 └──────────────────────────┬──────────────────────────────────────────────────┘
                            │ TLS/mTLS (webhooks + encrypted relay only)

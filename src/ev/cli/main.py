@@ -11,6 +11,7 @@ from ev.db.base import SessionLocal
 from ev.db.models import Ingest
 from ev.memory.status import build_status_summary
 from ev.memory.store import MemoryStore
+from ev.skills.manager import SkillManager
 from ev.tools.alerts_tool import AlertsTool
 from ev.tools.brief_tool import BriefTool
 from ev.tools.calendar_prep_tool import CalendarPrepTool
@@ -23,7 +24,6 @@ from ev.tools.registry import ToolRegistry
 from ev.tools.research_tool import ResearchTool
 from ev.tools.status_tool import StatusTool
 from ev.tools.work_tool import WorkTool
-from ev.skills.manager import SkillManager
 
 
 @click.group()
@@ -470,8 +470,8 @@ def eval():
 @click.option("--json", "json_output", is_flag=True, help="Emit JSON report")
 def run_eval(suite_dir: str, json_output: bool):
     """Run eval cases from SUITE_DIR (default: evals)."""
-    from ev.eval.runner import EvalRunner
     from ev.eval.reporter import json_report, text_report
+    from ev.eval.runner import EvalRunner
 
     async def _run():
         runner = EvalRunner(suite_dirs=[suite_dir])

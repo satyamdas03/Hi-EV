@@ -64,7 +64,7 @@ class UpdateChecker:
                 response = await client.get(url)
                 response.raise_for_status()
                 return response.json()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("Could not check for updates: %s", exc)
             raise UpdateCheckError(f"Could not reach GitHub releases: {exc}") from exc
 

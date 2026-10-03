@@ -1,10 +1,8 @@
 """Tests for the Hi-EV voice pipeline (mock backends; no heavy model downloads)."""
 
-from pathlib import Path
 
 import pytest
 
-from ev.voice.component import BaseSTTBackend, BaseTTSBackend
 from ev.voice.manager import VoiceManager
 from ev.voice.stt import MockSTT
 from ev.voice.tts import MockTTS

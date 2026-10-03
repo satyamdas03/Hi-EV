@@ -1,9 +1,11 @@
 # Phase C — Proactive Alerts + Persistent Context
 
-> **Date:** 2026-09-22
+> **Date:** 2026-09-22 (updated 2026-10-03)
 > **Goal:** EV stops being purely reactive; it pushes alerts, remembers conversation threads, and surfaces what matters before it is too late.
 > **Status:** ✅ COMPLETE and pushed to `origin/main` (`dff10c3`).
 > **Previous phase:** [Phase B — Reasoning Router + Eval](2026-09-17-phase-b-reasoning-router-eval.md)
+
+> **Update 2026-10-03:** Phases D, E, and F are now also complete and pushed to `origin/main` (commit `02781e2`, 253 passed / 1 skipped). Phase F added a plugin registry, skills, local voice pipeline, sandbox, eval runner, encrypted secrets vault, auto-updater, and unified `scripts/desktop_presence.py`. Phase G is next. See the [honest state assessment](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md) and the [Phase F dossier](2026-10-03-phase-f-plugin-architecture.md) for the full current picture.
 
 ---
 
@@ -60,4 +62,8 @@
 
 ## Next action
 
-[Phase D — Safe Autonomy + Desktop Presence](2026-09-22-phase-d-safe-autonomy.md)
+Phase D, E, and F are complete. Phase G is next.
+- [Phase D — Safe Autonomy + Desktop Presence](2026-09-22-phase-d-safe-autonomy.md)
+- [Phase E — Launch MVP](2026-10-02-phase-e-launch-mvp.md)
+- [Phase F — Plugin Architecture, Skills, Voice, and Auto-Updater](2026-10-03-phase-f-plugin-architecture.md)
+- [Phase G roadmap](../assessments/2026-09-17-hi-ev-honest-state-and-roadmap.md#phase-g--tauri-desktop-wrapper-richer-os-presence-skill-evals-cloud-relay-observability-active)

@@ -50,8 +50,9 @@ class ToolRegistry:
         if self._loaded:
             return
         # Import discovery here to avoid circular imports at module load.
-        from ev.core.discovery import discover_package
         from pathlib import Path
+
+        from ev.core.discovery import discover_package
 
         discover_package("ev.tools", Path(__file__).resolve().parent)
 
