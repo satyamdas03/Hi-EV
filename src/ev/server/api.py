@@ -27,6 +27,7 @@ from ev.server.setup import (
     get_setup_defaults,
 )
 from ev.server.telegram import TelegramRelay
+from ev.server.utils import _in_quiet_hours
 from ev.skills import load_skills_into_registry
 from ev.skills.manager import SkillManager
 from ev.tools.registry import ToolRegistry
@@ -153,15 +154,6 @@ async def _brief_loop(settings):
                 asyncio.create_task(relay.morning_brief(brief_text))
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Morning brief iteration failed: %s", exc)
-
-
-def _in_quiet_hours(start: str, end: str) -> bool:
-    now = datetime.now(UTC).time()
-    start_t = datetime.strptime(start, "%H:%M").time()  # noqa: DTZ007
-    end_t = datetime.strptime(end, "%H:%M").time()  # noqa: DTZ007
-    if start_t < end_t:
-        return start_t <= now <= end_t
-    return now >= start_t or now <= end_t
 
 
 app = FastAPI(title="EV Daemon API", lifespan=lifespan)

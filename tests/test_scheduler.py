@@ -1,6 +1,7 @@
 """Tests for the background ingestion scheduler."""
 
 import asyncio
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -22,14 +23,20 @@ async def store():
 
 
 def test_in_quiet_hours():
-    # These are time-only checks; pick times well inside and outside the default 22:00-08:00 window.
-    assert _in_quiet_hours("22:00", "08:00") is not _in_quiet_hours("12:00", "13:00")
+    # Deterministic UTC datetimes: 23:00 is inside the 22:00-08:00 window.
+    inside = datetime(2024, 1, 1, 23, 0, tzinfo=UTC)
+    outside = datetime(2024, 1, 1, 10, 0, tzinfo=UTC)
+    assert _in_quiet_hours("22:00", "08:00", now=inside) is True
+    assert _in_quiet_hours("22:00", "08:00", now=outside) is False
 
 
 def test_in_quiet_hours_wraps_midnight():
-    from datetime import time as dt_time
-    noon = dt_time(12, 0)
-    assert _in_quiet_hours("22:00", "08:00") is True or noon.hour not in (22, 23, 0, 1, 2, 3, 4, 5, 6, 7)
+    before_midnight = datetime(2024, 1, 1, 23, 0, tzinfo=UTC)
+    after_midnight = datetime(2024, 1, 1, 2, 0, tzinfo=UTC)
+    noon = datetime(2024, 1, 1, 12, 0, tzinfo=UTC)
+    assert _in_quiet_hours("22:00", "08:00", now=before_midnight) is True
+    assert _in_quiet_hours("22:00", "08:00", now=after_midnight) is True
+    assert _in_quiet_hours("22:00", "08:00", now=noon) is False
 
 
 @patch("ev.server.scheduler.NotesIngestion")

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
 
 from ev.config import Settings
 from ev.db.base import SessionLocal
@@ -16,6 +15,7 @@ from ev.ingestion.github import GitHubIngestion
 from ev.ingestion.notes import NotesIngestion
 from ev.memory.chunks import chunk_ingest_records
 from ev.memory.store import MemoryStore
+from ev.server.utils import _in_quiet_hours
 
 logger = logging.getLogger(__name__)
 
@@ -95,13 +95,3 @@ async def _run_ingestion_pass(settings: Settings) -> dict[str, int]:
 
     logger.info("Ingestion pass complete: %s", counts)
     return counts
-
-
-def _in_quiet_hours(start: str, end: str) -> bool:
-    """Return True if the current UTC time falls within quiet hours."""
-    now = datetime.now(UTC).time()
-    start_t = datetime.strptime(start, "%H:%M").time()  # noqa: DTZ007
-    end_t = datetime.strptime(end, "%H:%M").time()  # noqa: DTZ007
-    if start_t < end_t:
-        return start_t <= now <= end_t
-    return now >= start_t or now <= end_t
