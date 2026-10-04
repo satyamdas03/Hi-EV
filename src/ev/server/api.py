@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import sys
+import uuid
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
@@ -551,14 +552,16 @@ async def voice_transcribe(audio: UploadFile | None = None):
     manager = VoiceManager(settings=settings)
     upload_dir = Path(settings.app_data_dir) / "voice" / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
-    input_path = upload_dir / (audio.filename or "input.wav")
+    # Discard untrusted filename to avoid path traversal / arbitrary file write.
+    safe_name = f"{uuid.uuid4().hex}.wav"
+    input_path = upload_dir / safe_name
     input_path.write_bytes(await audio.read())
 
     try:
         transcript = await manager.transcribe(input_path)
     except Exception as exc:
         logger.warning("Voice transcription failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Transcription failed") from exc
     return {"transcript": transcript}
 
 
@@ -578,7 +581,7 @@ async def voice_speak(req: VoiceSpeakRequest):
         await manager.speak(req.text, output_path=output_path)
     except Exception as exc:
         logger.warning("Voice synthesis failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Synthesis failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Synthesis failed") from exc
     return {"audio_path": str(output_path)}
 
 

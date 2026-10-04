@@ -92,11 +92,21 @@ class SetupRequest(BaseModel):
 
     @field_validator("voice_stt_backend", "voice_tts_backend")
     @classmethod
-    def _strip_empty_backend(cls, value: str | None) -> str | None:
+    def _valid_voice_backend(cls, value: str | None) -> str | None:
         if value is None:
             return None
         stripped = value.strip()
-        return stripped if stripped else None
+        if not stripped:
+            return None
+        allowed_stt = {"faster_whisper", "mock"}
+        allowed_tts = {"kokoro", "pyttsx3", "mock"}
+        # Validate against the union so we can reuse the same validator for both
+        # fields; the VoiceManager will fall back safely if a backend is missing.
+        if stripped not in allowed_stt | allowed_tts:
+            raise ValueError(
+                f"voice backend must be one of {sorted(allowed_stt | allowed_tts)}"
+            )
+        return stripped
 
 
 @dataclass
