@@ -22,9 +22,15 @@ class FasterWhisperSTT(BaseSTTBackend):
 
     name = "faster_whisper"
 
-    def __init__(self, model_size: str = "tiny", device: str = "cpu"):
+    def __init__(
+        self,
+        model_size: str = "tiny",
+        device: str = "cpu",
+        model_dir: Path | str | None = None,
+    ):
         self.model_size = model_size
         self.device = device
+        self.model_dir = Path(model_dir) if model_dir else None
         self._model: Any | None = None
 
     def _load(self):
@@ -33,7 +39,13 @@ class FasterWhisperSTT(BaseSTTBackend):
                 from faster_whisper import WhisperModel
             except ImportError as exc:
                 raise VoiceBackendError("faster-whisper is not installed") from exc
-            self._model = WhisperModel(self.model_size, device=self.device)
+            if self.model_dir:
+                self.model_dir.mkdir(parents=True, exist_ok=True)
+            self._model = WhisperModel(
+                self.model_size,
+                device=self.device,
+                download_root=str(self.model_dir) if self.model_dir else None,
+            )
         return self._model
 
     async def transcribe(self, audio_path: Path, language: str | None = None) -> str:

@@ -13,6 +13,9 @@ export type SetupDefaults = {
   robocad_path?: string
   learningrobotics_path?: string
   hiev_path?: string
+  voice_enabled?: boolean
+  voice_stt_backend?: string
+  voice_tts_backend?: string
 }
 
 export function SetupWizard() {
@@ -34,6 +37,9 @@ export function SetupWizard() {
   const [blockedDomains, setBlockedDomains] = useState('')
   const [quietStart, setQuietStart] = useState('22:00')
   const [quietEnd, setQuietEnd] = useState('08:00')
+  const [voiceEnabled, setVoiceEnabled] = useState(false)
+  const [voiceSttBackend, setVoiceSttBackend] = useState('')
+  const [voiceTtsBackend, setVoiceTtsBackend] = useState('')
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState('')
 
@@ -55,6 +61,9 @@ export function SetupWizard() {
         setModel(defs.llm_model)
         setQuietStart(defs.quiet_start)
         setQuietEnd(defs.quiet_end)
+        setVoiceEnabled(Boolean(defs.voice_enabled))
+        setVoiceSttBackend(defs.voice_stt_backend || '')
+        setVoiceTtsBackend(defs.voice_tts_backend || '')
       })
       .catch((err) => {
         setError(`Could not load setup status: ${err}`)
@@ -86,6 +95,9 @@ export function SetupWizard() {
         .filter(Boolean),
       quiet_start: quietStart,
       quiet_end: quietEnd,
+      voice_enabled: voiceEnabled,
+      voice_stt_backend: voiceSttBackend || undefined,
+      voice_tts_backend: voiceTtsBackend || undefined,
     }
 
     try {

@@ -4,7 +4,7 @@
 > **Goal:** Get Hi-EV from its current state to a polished, testable, launch-ready Windows product.
 > **Voice strategy:** Local-first (`faster-whisper` + Kokoro/pyttsx3) with browser fallback; LiveKit optional post-launch.
 > **Launch scope:** Polished local Windows app + file-system watcher + full test coverage. Cloud relay, observability, macOS/Linux, and tool self-authoring move to v1.1 / Phase H.
-> **Status:** G1 complete, G2 complete, G3 next.
+> **Status:** G1 complete, G2 complete, G3 in progress (backend endpoints, model cache paths, setup backend wired; UI section, smoke script, and endpoint tests pending).
 
 ---
 
@@ -15,8 +15,8 @@
   - Native window, system tray, global shortcut, daemon manager.
   - Windows MSI installer produced.
   - Security hardened: shell permissions removed, CSP added, devUrl pinned to 127.0.0.1.
-- Local voice pipeline exists (`ev.voice`) but is **opt-in and not exercised by default**.
-- File-system watcher is **not implemented**; ingestion is scheduler-driven.
+- Local voice pipeline exists (`ev.voice`) and backend endpoints (`/voice/settings`, `/voice/transcribe`, `/voice/speak`) plus setup backend voice fields are now wired; the UI section, Tauri shortcut turn, HUD mic fallback, smoke script, and endpoint tests are pending.
+- File-system watcher is **implemented** (`ev.ingestion.watcher`) and wired into the daemon lifespan; incremental ingestion on create/modify/delete is live.
 - Skill eval golden datasets are **not implemented**.
 - Cloud relay / webhook ingress is **not implemented**.
 - Observability / cost tracing / `ev why` is **not implemented**.
@@ -24,10 +24,10 @@
 
 **Verification baseline:**
 - `python -m pytest` → 260 passed, 1 skipped
-- `ruff check .` → clean
+- `ruff check src tests` → clean
 - `cd web && npm run build` → clean
 - `cd desktop/src-tauri && cargo check && cargo clippy -- -D warnings` → clean
-- `cd desktop && npm run tauri:build` → Windows MSI produced
+- `cd desktop && npm run tauri:build` → Windows MSI produced (last verified at G2; re-verify at G6)
 
 ---
 
@@ -107,24 +107,26 @@ And the full test suite passes with no new skips or warnings.
 
 ---
 
-### 🚧 Phase G3 — Voice End-to-End (next)
+### 🚧 Phase G3 — Voice End-to-End (in progress)
 
 **Goal:** Voice works out of the box in the Tauri app and browser HUD.
 
-**Deliverables:**
-1. Audit and fix any voice backend edge cases:
-   - `faster-whisper` model download/cache path under `%LOCALAPPDATA%\Hi-EV\models`.
-   - Kokoro voice model download/cache.
-   - pyttsx3 fallback when heavier models are missing.
-2. Add voice settings to setup wizard:
-   - Enable/disable voice.
-   - Choose STT backend (`faster_whisper` / `mock`).
-   - Choose TTS backend (`kokoro` / `pyttsx3` / `mock`).
-3. Ensure Tauri global shortcut triggers a full voice turn:
-   - Record → transcribe → `POST /voice/chat` → synthesize → play.
-4. Add a visible mic button in HUD that uses browser SpeechRecognition when local voice is disabled or unavailable.
-5. Add `scripts/smoke_voice.py` that runs a headless voice turn with the mock backend end-to-end.
-6. Document voice setup in `README.md`.
+**Deliverables (status):**
+1. ✅ Voice backend edge cases fixed:
+   - `voice_model_dir` (`%LOCALAPPDATA%\Hi-EV\models`) is created and passed to `FasterWhisperSTT`, `KokoroTTS`, and `Pyttsx3TTS`.
+2. ✅ Setup wizard backend extended:
+   - `SetupRequest` / `.env` template / `get_setup_defaults()` now include `voice_enabled`, `voice_stt_backend`, `voice_tts_backend`.
+3. ✅ Backend voice endpoints added:
+   - `GET /voice/settings` → current config + available backends.
+   - `POST /voice/transcribe` → multipart audio upload → transcript.
+   - `POST /voice/speak` → text → synthesized WAV path.
+   - Guard check added to `POST /voice/chat`.
+4. 🚧 Setup wizard UI section still needs insertion before Quiet hours.
+5. 🚧 Tauri global shortcut full voice turn still needs wiring.
+6. 🚧 Visible HUD mic button fallback still needs implementation.
+7. 🚧 `scripts/smoke_voice.py` still needs creation.
+8. 🚧 Voice endpoint tests still need to be added.
+9. 🚧 Document voice setup in `README.md`.
 
 **Acceptance criteria:**
 - With voice enabled and mock backend, pressing `Ctrl+Alt+E` produces a spoken response.

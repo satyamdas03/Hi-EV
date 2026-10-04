@@ -8,7 +8,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -19,6 +25,7 @@ from ev.db.base import SessionLocal
 from ev.db.models import ChatThread
 from ev.ingestion.watcher import VaultWatcher
 from ev.memory.store import MemoryStore
+from ev.security.guard import Guard, GuardStatus
 from ev.server.chat import ChatSession
 from ev.server.scheduler import _ingest_loop
 from ev.server.setup import (
@@ -33,6 +40,7 @@ from ev.skills import load_skills_into_registry
 from ev.skills.manager import SkillManager
 from ev.tools.registry import ToolRegistry
 from ev.updater.checker import UpdateChecker
+from ev.voice.manager import VoiceManager
 
 logger = logging.getLogger(__name__)
 
@@ -465,6 +473,19 @@ class VoiceChatRequest(BaseModel):
     text: str
 
 
+class VoiceSettingsResponse(BaseModel):
+    voice_enabled: bool
+    stt_backend: str
+    tts_backend: str
+    available_stt: list[str]
+    available_tts: list[str]
+    model_dir: str
+
+
+class VoiceSpeakRequest(BaseModel):
+    text: str
+
+
 class _CapturingWebSocket:
     """Minimal WebSocket stand-in that records every JSON payload sent by ChatSession."""
 
@@ -484,6 +505,81 @@ def _response_from_captured(sent: list[dict[str, Any]]) -> str:
         elif payload.get("type") == "confirm":
             return payload.get("prompt", "EV needs your confirmation before acting.")
     return "".join(deltas)
+
+
+def _available_voice_backends(kind: str) -> list[str]:
+    """Return the names of registered voice backends that can be imported."""
+    from ev.core import registry
+
+    names: list[str] = []
+    for name in registry[kind].list():
+        cls = registry[kind].get(name)
+        try:
+            # Attempt a no-args instantiation; backends that raise VoiceBackendError
+            # because of missing optional dependencies are still listed, but ones
+            # that raise unrelated ImportError are skipped.
+            cls()
+            names.append(name)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Voice backend %s/%s not available: %s", kind, name, exc)
+    return names
+
+
+@app.get("/voice/settings", response_model=VoiceSettingsResponse)
+async def voice_settings():
+    """Return current voice configuration and available backends."""
+    settings = get_settings()
+    return VoiceSettingsResponse(
+        voice_enabled=settings.voice_enabled,
+        stt_backend=settings.voice_stt_backend or "mock",
+        tts_backend=settings.voice_tts_backend or "mock",
+        available_stt=_available_voice_backends("stt"),
+        available_tts=_available_voice_backends("tts"),
+        model_dir=str(settings.voice_model_dir),
+    )
+
+
+@app.post("/voice/transcribe")
+async def voice_transcribe(audio: UploadFile | None = None):
+    """Transcribe an uploaded WAV/audio file using the configured STT backend."""
+    if audio is None:
+        raise HTTPException(status_code=400, detail="No audio file uploaded")
+    settings = get_settings()
+    if not settings.voice_enabled:
+        raise HTTPException(status_code=400, detail="Voice is disabled in settings")
+
+    manager = VoiceManager(settings=settings)
+    upload_dir = Path(settings.app_data_dir) / "voice" / "uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    input_path = upload_dir / (audio.filename or "input.wav")
+    input_path.write_bytes(await audio.read())
+
+    try:
+        transcript = await manager.transcribe(input_path)
+    except Exception as exc:
+        logger.warning("Voice transcription failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
+    return {"transcript": transcript}
+
+
+@app.post("/voice/speak")
+async def voice_speak(req: VoiceSpeakRequest):
+    """Synthesize text to a WAV using the configured TTS backend and return its path."""
+    settings = get_settings()
+    if not settings.voice_enabled:
+        raise HTTPException(status_code=400, detail="Voice is disabled in settings")
+
+    manager = VoiceManager(settings=settings)
+    output_dir = Path(settings.app_data_dir) / "voice" / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "speak_output.wav"
+
+    try:
+        await manager.speak(req.text, output_path=output_path)
+    except Exception as exc:
+        logger.warning("Voice synthesis failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Synthesis failed: {exc}") from exc
+    return {"audio_path": str(output_path)}
 
 
 @app.post("/focus")
@@ -508,6 +604,11 @@ async def voice_chat_endpoint(req: VoiceChatRequest):
     """
     if not req.text or not req.text.strip():
         return {"response": "I didn't catch that."}
+
+    # Guard voice input just like WebSocket chat.
+    guard_decision = Guard().check(req.text.strip(), source="user", trusted=True)
+    if guard_decision.status == GuardStatus.BLOCKED:
+        return {"response": guard_decision.reason}
 
     ws = _CapturingWebSocket()
     session = ChatSession(ws)

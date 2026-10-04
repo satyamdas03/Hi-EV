@@ -29,13 +29,11 @@ class VoiceManager:
         """Pick the best available STT backend."""
         from ev.voice.stt import FasterWhisperSTT, MockSTT, VoiceBackendError
 
-        if self.settings.voice_stt_backend:
-            name = self.settings.voice_stt_backend
-        else:
-            name = "faster_whisper"
+        name = self.settings.voice_stt_backend or "faster_whisper"
+        model_dir = self.settings.voice_model_dir
         try:
             if name == "faster_whisper":
-                return FasterWhisperSTT()
+                return FasterWhisperSTT(model_dir=model_dir)
         except VoiceBackendError as exc:
             logger.warning("Preferred STT backend unavailable: %s", exc)
         return MockSTT()
@@ -44,15 +42,12 @@ class VoiceManager:
         """Pick the best available TTS backend."""
         from ev.voice.tts import KokoroTTS, MockTTS, Pyttsx3TTS, VoiceBackendError
 
-        if self.settings.voice_tts_backend:
-            name = self.settings.voice_tts_backend
-        else:
-            # Prefer pyttsx3 as a lightweight default; Kokoro is higher quality but heavier.
-            name = "pyttsx3"
+        name = self.settings.voice_tts_backend or "pyttsx3"
+        model_dir = self.settings.voice_model_dir
         for backend_cls, backend_name in ((Pyttsx3TTS, "pyttsx3"), (KokoroTTS, "kokoro")):
             if name == backend_name:
                 try:
-                    return backend_cls()
+                    return backend_cls(model_dir=model_dir)
                 except VoiceBackendError as exc:
                     logger.warning("Preferred TTS backend %s unavailable: %s", backend_name, exc)
         return MockTTS()

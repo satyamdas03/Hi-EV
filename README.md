@@ -20,8 +20,9 @@ EV is not a chatbot. It is the persistent operating system for a single human �
   - Tauri artifact smoke test: `scripts/smoke_tauri.py`.
   - **File-system watcher (`ev.ingestion.watcher`)** incrementally ingests notes and project `.md` files on create/modify/delete, wired into the daemon lifespan.
 - **Tests:** 260 passed, 1 skipped; **ruff:** clean; **frontend build:** clean; **Tauri `cargo check`/`cargo clippy`:** clean.
-- **Latest commit area:** Phase G2 file-system watcher.
-- **Remaining launch work:** voice end-to-end (G3), skill eval golden datasets (G4), security/kill-switch (G5), final integration + launch test sweep (G6). macOS/Linux installers, cloud relay/webhook ingress, observability / cost tracing / `ev why`, and LiveKit optional voice are deferred to v1.1.
+- **Latest commit area:** Phase G3 voice checkpoint.
+- **Phase G3 status:** Backend voice endpoints (`/voice/settings`, `/voice/transcribe`, `/voice/speak`), guard check on `/voice/chat`, model cache path wiring, and setup-wizard backend voice fields are in place. Frontend state/payload is wired; the visible Voice section in `SetupWizard.tsx`, `scripts/smoke_voice.py`, and dedicated endpoint tests are still pending.
+- **Remaining launch work:** complete G3 UI section + smoke script + tests, skill eval golden datasets (G4), security/kill-switch (G5), final integration + launch test sweep (G6). macOS/Linux installers, cloud relay/webhook ingress, observability / cost tracing / `ev why`, and LiveKit optional voice are deferred to v1.1.
 
 ---
 
@@ -375,8 +376,8 @@ Instantly:
 **Goal:** Wrap EV in a polished native Windows desktop shell so a non-technical user can install and run it.
 - **G0 ✅** Tauri v2 skeleton: native window, tray, global shortcut, daemon manager, Windows MSI.
 - **G1 ✅** Launch polish: real icons, setup-wizard Python detection, configurable shortcut, daemon crash recovery, tray update menu, quit cleanup, artifact smoke test.
-- **G2 🚧** File-system watcher for notes vault and active project directories.
-- **G3** Voice end-to-end through Tauri shortcut and HUD (local + browser fallback).
+- **G2 ✅** File-system watcher for notes vault and active project directories.
+- **G3 🚧** Voice end-to-end through Tauri shortcut and HUD (local + browser fallback). Backend endpoints, model cache paths, and setup backend are wired; UI section, smoke script, and endpoint tests pending.
 - **G4** Skill eval golden datasets with per-skill pass/fail reports.
 - **G5** Security, safety, and kill switch; queryable audit log.
 - **G6** Final integration and launch test sweep (MSI smoke test, benchmarks, clean uninstall, version bump).

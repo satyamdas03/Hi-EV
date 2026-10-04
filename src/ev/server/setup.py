@@ -49,6 +49,11 @@ EV_QUIET_START={quiet_start}
 EV_QUIET_END={quiet_end}
 EV_KILL_SWITCH=false
 
+# Local voice pipeline.
+EV_VOICE_ENABLED={voice_enabled}
+EV_VOICE_STT_BACKEND={voice_stt_backend}
+EV_VOICE_TTS_BACKEND={voice_tts_backend}
+
 # Local repo paths (used by the work_on tool).
 EV_ROBOCAD_PATH={robocad_path}
 EV_LEARNINGROBOTICS_PATH={learningrobotics_path}
@@ -73,6 +78,9 @@ class SetupRequest(BaseModel):
     robocad_path: str | None = None
     learningrobotics_path: str | None = None
     hiev_path: str | None = None
+    voice_enabled: bool = Field(default=False)
+    voice_stt_backend: str | None = Field(default=None)
+    voice_tts_backend: str | None = Field(default=None)
 
     @field_validator("llm_provider")
     @classmethod
@@ -81,6 +89,14 @@ class SetupRequest(BaseModel):
         if value not in allowed:
             raise ValueError(f"llm_provider must be one of {allowed}")
         return value
+
+    @field_validator("voice_stt_backend", "voice_tts_backend")
+    @classmethod
+    def _strip_empty_backend(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped if stripped else None
 
 
 @dataclass
@@ -248,6 +264,9 @@ def _write_env_file(req: SetupRequest, env_path: Path) -> None:
         github_token_line=github_token_line,
         quiet_start=req.quiet_start,
         quiet_end=req.quiet_end,
+        voice_enabled="true" if req.voice_enabled else "false",
+        voice_stt_backend=req.voice_stt_backend or "",
+        voice_tts_backend=req.voice_tts_backend or "",
         robocad_path=req.robocad_path or _default_repo_path("RoboCAD") or "",
         learningrobotics_path=req.learningrobotics_path or _default_repo_path("LearningRobotics") or "",
         hiev_path=req.hiev_path or _default_repo_path("Hi-EV") or "",
@@ -296,6 +315,9 @@ def get_setup_defaults() -> dict[str, Any]:
         "blocked_domains": [],
         "quiet_start": "22:00",
         "quiet_end": "08:00",
+        "voice_enabled": settings.voice_enabled,
+        "voice_stt_backend": settings.voice_stt_backend or "",
+        "voice_tts_backend": settings.voice_tts_backend or "",
         "robocad_path": _default_repo_path("RoboCAD"),
         "learningrobotics_path": _default_repo_path("LearningRobotics"),
         "hiev_path": _default_repo_path("Hi-EV"),

@@ -21,9 +21,10 @@ class KokoroTTS(BaseTTSBackend):
 
     name = "kokoro"
 
-    def __init__(self, voice: str = "af", lang: str = "en-us"):
+    def __init__(self, voice: str = "af", lang: str = "en-us", model_dir: Path | str | None = None):
         self.voice = voice
         self.lang = lang
+        self.model_dir = Path(model_dir) if model_dir else None
         self._pipeline: Any | None = None
 
     def _load(self):
@@ -32,6 +33,9 @@ class KokoroTTS(BaseTTSBackend):
                 from kokoro import KPipeline  # type: ignore[import-untyped]
             except ImportError as exc:
                 raise VoiceBackendError("kokoro is not installed") from exc
+            # Kokoro downloads voices on demand; ensure the cache directory exists.
+            if self.model_dir:
+                self.model_dir.mkdir(parents=True, exist_ok=True)
             self._pipeline = KPipeline(lang_code=self.lang)
         return self._pipeline
 
@@ -61,12 +65,13 @@ class Pyttsx3TTS(BaseTTSBackend):
 
     name = "pyttsx3"
 
-    def __init__(self) -> None:
+    def __init__(self, model_dir: Path | str | None = None) -> None:
         try:
             import pyttsx3  # type: ignore[import-untyped]
         except ImportError as exc:
             raise VoiceBackendError("pyttsx3 is not installed") from exc
         self.engine = pyttsx3.init()
+        self.model_dir = Path(model_dir) if model_dir else None
 
     async def synthesize(self, text: str, output_path: Path | None = None, voice: str | None = None) -> Path:
         output_path = output_path or Path("tmp_tts.wav")
