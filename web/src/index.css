@@ -705,6 +705,36 @@ body,
   padding: 0.6rem 0.8rem;
 }
 
+.setup-warning-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.setup-ok {
+  color: var(--accent);
+  background: rgba(25, 196, 196, 0.08);
+  border: 1px solid rgba(25, 196, 196, 0.3);
+  border-radius: 4px;
+  padding: 0.6rem 0.8rem;
+  margin: 0;
+}
+
+.setup-link {
+  font-size: 0.75rem;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 0.4rem 0.8rem;
+  text-decoration: none;
+  letter-spacing: 0.05em;
+}
+
+.setup-link:hover {
+  background: var(--accent-hot);
+}
+
 .setup-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

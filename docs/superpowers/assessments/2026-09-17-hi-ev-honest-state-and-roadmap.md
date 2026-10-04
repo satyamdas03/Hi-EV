@@ -6,7 +6,7 @@
 > **Ruff:** clean
 > **Frontend build:** clean
 > **Tauri build:** `cargo check`/`cargo clippy` clean; Windows MSI produced
-> **Status:** Web/Voice/HUD MVP complete. Phases A–F complete and pushed to `origin/main`. Phase G is in progress: Tauri desktop wrapper skeleton built.
+> **Status:** Web/Voice/HUD MVP complete. Phases A–F complete and pushed to `origin/main`. Phase G is in progress: Tauri skeleton complete; user-approved end-to-end launch roadmap defined (G1–G6).
 
 ---
 
@@ -316,33 +316,44 @@ We propose **six phases**, each with a clear deliverable and acceptance criteria
 - `cd web && npm run build` → clean.
 - Commit `02781e2` pushed to `origin/main`.
 
-### Phase G — Tauri Desktop Wrapper, Richer OS Presence, Skill Evals, Cloud Relay, Observability (active)
-**Goal:** Wrap EV in a native desktop shell, deepen OS-level presence, measure skill quality, add cloud/webhook ingress, and trace cost/latency/audit.
+### Phase G — Tauri Desktop Wrapper, File-System Watcher, Voice, Skill Evals, Safety (active, launch-blocking)
+**Goal:** Wrap EV in a polished native desktop shell, make ingestion event-driven, harden voice end-to-end, measure skill quality, and close the remaining safety gaps so a non-technical user can install and run Hi-EV on Windows.
 
 **Deliverables:**
-1. ✅ Tauri desktop wrapper skeleton:
+1. ✅ **G0** Tauri desktop wrapper skeleton:
    - Native window loading `web/dist`, system tray, global shortcut, daemon manager.
    - Windows MSI installer produced; macOS/Linux targets configured.
-2. 🚧 Tauri wrapper polish before launch:
-   - Real icons, setup-wizard Python check, configurable shortcut, cross-platform smoke tests.
-3. Richer OS-level presence:
-   - Global wake word (Porcupine/openWakeWord) outside the browser.
-   - Desktop capture / screenshot ingestion.
-   - Intent bridging from OS notifications and share sheets.
-4. File-system watcher for notes vault and project directories.
-5. Skill eval harness and example golden datasets.
-6. Cloud relay / webhook ingress for Telegram, GitHub webhooks, and future phone/email fallback.
-7. Observability / cost tracing:
-   - Structured logging (OpenTelemetry or JSON).
-   - Per-request cost/latency/audit traces.
-   - `ev why` audit query tool.
+2. ✅ **G1** Tauri Launch Polish complete:
+   - Real icons, setup-wizard Python check, configurable shortcut, daemon crash recovery, tray update item, quit cleanup.
+   - Tauri artifact smoke test (`scripts/smoke_tauri.py`); clean-VM MSI smoke test remains manual.
+3. 🚧 **G2** File-System Watcher (next stream):
+   - Watch `notes_path` and active project directories.
+   - Incremental ingestion and re-indexing with debounce/idempotency.
+4. **G3** Voice End-to-End:
+   - Local voice (`faster-whisper` + Kokoro/pyttsx3) works through Tauri shortcut and HUD.
+   - Browser SpeechRecognition fallback.
+   - Voice settings in setup wizard; voice smoke test.
+5. **G4** Skill Eval Golden Datasets:
+   - Golden questions for built-in skills.
+   - Per-skill pass/fail report with latency.
+6. **G5** Security, Safety & Kill Switch:
+   - Kill switch pauses loops and T1/T2 actions.
+   - Queryable audit log.
+   - Personal-only boundary review and setup blocklist step.
+7. **G6** Final Integration & Launch Test Sweep:
+   - End-to-end smoke tests through the MSI.
+   - Performance benchmarks and clean uninstall verification.
+   - Version bump and changelog.
+
+**Deferred to v1.1 / Phase H:** macOS/Linux installers, cloud relay/webhook ingress, observability/cost tracing (`ev why`), LiveKit optional cloud voice, real OpenJarvis code/skill integration, tool self-authoring loop, global wake word outside browser, desktop screenshot ingestion.
 
 **Acceptance criteria:**
-- Native desktop app installs and runs without a browser tab.
-- A webhook from GitHub or Telegram reaches the local daemon through a minimal cloud relay.
+- Native desktop app installs and runs on Windows without a browser tab.
+- Adding a file to the notes vault is reflected in memory within minutes.
+- Voice works end-to-end (local or browser fallback).
 - Skill eval suite produces pass/fail reports with per-skill latency.
-- Cost/latency traces are queryable for any chat turn.
-- Full test suite still passes; ruff clean; frontend build clean; Tauri build clean.
+- Kill switch hard-pauses autonomous actions.
+- Full test suite passes; ruff clean; frontend build clean; Tauri build clean.
 
 ---
 
@@ -376,25 +387,21 @@ We propose **six phases**, each with a clear deliverable and acceptance criteria
 
 ## 8. What to build next (recommended immediate sprint)
 
-Phases A–F are complete. The next highest-leverage work is **Phase G — Tauri Desktop Wrapper, Richer OS Presence, Skill Evals, Cloud Relay, and Observability** so EV works as a native desktop app, watches the file system, accepts webhooks, and traces its own cost/latency/audit.
+Phases A–F and Phase G1 are complete. The user-approved launch roadmap is **Phase G1–G6**. The highest-leverage next work is **G2 — File-System Watcher** so EV feels ambient: when you add or edit a note or project file, EV updates its memory within minutes instead of waiting for the next scheduler poll.
 
-**Sprint goal:** Tauri wrapper replaces the browser-only HUD, a file-system watcher refreshes notes, a skill eval harness measures skill quality, a minimal cloud relay forwards webhooks, and the first cost/latency traces are queryable.
+**Sprint goal:** Add a `watchdog`-based file-system watcher that incrementally ingests changes from the notes vault and active project directories, with debounce/idempotency and full test coverage.
 
 **Tasks:**
-1. Tauri shell: native window wrapping `web/dist/`, system tray, global shortcut, installers.
-2. File-system watcher: watch `notes_path` and active project directories for changes, ingest automatically.
-3. Global wake word: Porcupine or openWakeWord running in the Tauri/desktop process.
-4. Desktop capture: ingest screenshots/diagrams into document memory.
-5. Skill eval harness: golden datasets for built-in skills, pass/fail reporter.
-6. Cloud relay / webhook ingress: minimal queueing relay for GitHub/Telegram while laptop sleeps.
-7. Observability: JSON-structured logs, per-request cost/latency/audit trace, `ev why` query tool.
+1. Create `ev.ingestion.watcher` using `watchdog` to watch `settings.notes_path` and configured project paths.
+2. Debounce and coalesce events (e.g., 2-second quiet period).
+3. Incrementally re-run ingestion and re-index `DocumentChunk` rows only for changed paths.
+4. Hook watcher into FastAPI lifespan (start on boot, stop on shutdown).
+5. Add watcher tests for create, modify, and delete events.
 
 **Acceptance criteria:**
-- Native app launches without a browser tab.
-- Adding a file to the notes vault is reflected in memory within minutes.
-- A GitHub webhook reaches the daemon via the relay and creates an ingest record.
-- Skill eval suite produces a report with per-skill pass rate and latency.
-- Full test suite still passes; ruff clean; frontend build clean.
+- Adding a `.md` file to the notes vault is queryable via memory search within 2 minutes.
+- Deleting a note removes its chunks from the vector store.
+- Full test suite still passes; ruff clean; frontend build clean; Tauri build clean.
 
 ---
 
@@ -417,4 +424,4 @@ Hi-EV is no longer a sketch. The daemon runs, the voice/HUD face works, the desk
 
 But the system is still *reactive* and *manual* in key ways. The path to the vision runs through making EV **continuously aware** (file-system/webhook ingestion), **natively present** (Tauri wrapper, global wake word, desktop capture), **measurable at the skill level**, and **observable** (cost/latency/audit tracing) — in that order.
 
-The good news: every one of those capabilities can be built incrementally on the existing scaffold. The bad news: there is no shortcut. The next milestone is not another UI polish; it is making EV a native desktop app that watches the filesystem, receives webhooks, and explains its own decisions.
+The good news: every one of those capabilities can be built incrementally on the existing scaffold. The bad news: there is no shortcut. The approved launch plan focuses the next milestone on making EV a **polished, installable Windows app** that watches the filesystem, works by voice end-to-end, measures skill quality, and pauses autonomy safely. Cloud ingress, observability, and advanced OS presence are deferred to v1.1.

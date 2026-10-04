@@ -50,6 +50,10 @@ async def test_setup_status_needs_setup_when_env_missing(temp_env_dir, tmp_path)
     assert "env_file" in data["missing"]
     assert "notes_path" in data["missing"]
     assert "llm_key" in data["missing"]
+    assert "python" not in data["missing"]
+    assert data["python_ok"] is True
+    assert data["python_version"] is not None
+    assert data["python_path"] is not None
     assert "defaults" in data
 
 
@@ -135,6 +139,21 @@ async def test_setup_apply_validates_notes_path(temp_env_dir):
     assert "notes path" in detail or "could not create" in detail
 
 
+async def test_setup_status_reports_python_missing(temp_env_dir, tmp_path):
+    from ev.server import setup
+    from ev.server.api import app
+
+    with patch.object(setup, "check_python_version", return_value=(False, None, None)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/setup")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "python" in data["missing"]
+    assert data["python_ok"] is False
+    assert data["python_version"] is None
+
+
 async def test_setup_apply_rejects_invalid_provider(temp_env_dir, tmp_path):
     from ev.server.api import app
 
@@ -148,3 +167,16 @@ async def test_setup_apply_rejects_invalid_provider(temp_env_dir, tmp_path):
         response = await client.post("/setup", json=payload)
 
     assert response.status_code == 422
+
+
+def test_check_python_version_detects_current_python():
+    from ev.server.setup import check_python_version
+
+    ok, version, path = check_python_version()
+    # The test suite itself is running under Python, so a valid interpreter
+    # should almost always be discoverable.
+    assert ok is True
+    assert version is not None
+    assert path is not None
+    major, minor = map(int, version.split(".")[:2])
+    assert (major, minor) >= (3, 12)

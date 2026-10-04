@@ -2,10 +2,13 @@ pub mod daemon;
 pub mod shortcut;
 pub mod tray;
 
+use std::time::Duration;
+
 use tauri::{Manager, RunEvent};
+use tauri_plugin_notification::NotificationExt;
 
 use daemon::DaemonHandle;
-use shortcut::register_global_shortcut;
+use shortcut::{register_global_shortcut, shortcut_string};
 use tray::build_tray;
 
 pub fn run() {
@@ -28,14 +31,60 @@ pub fn run() {
                     Ok(_) => {
                         match daemon.wait_for_health(45).await {
                             Ok(_) => {
+                                let _ = handle.notification().builder()
+                                    .title("Hi-EV is ready")
+                                    .body(format!(
+                                        "Press {} to talk to EV, or open the window from the tray.",
+                                        shortcut_string()
+                                    ))
+                                    .show();
                                 if let Some(window) = handle.get_webview_window("main") {
                                     let _ = window.show();
                                 }
                             }
-                            Err(e) => eprintln!("Daemon did not become healthy: {e}"),
+                            Err(e) => {
+                                let _ = handle.notification().builder()
+                                    .title("Hi-EV daemon is not responding")
+                                    .body(format!("The background daemon did not become healthy: {e}"))
+                                    .show();
+                                eprintln!("Daemon did not become healthy: {e}");
+                            }
                         }
                     }
-                    Err(e) => eprintln!("Failed to start daemon: {e}"),
+                    Err(e) => {
+                        let _ = handle.notification().builder()
+                            .title("Hi-EV daemon failed to start")
+                            .body(format!("Could not start the background daemon: {e}"))
+                            .show();
+                        eprintln!("Failed to start daemon: {e}");
+                    }
+                }
+            });
+
+            // Monitor the daemon process and notify the user if it exits unexpectedly.
+            let monitor_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let daemon = monitor_handle.state::<DaemonHandle>().inner().clone();
+                loop {
+                    // Wait until a daemon process is tracked, then wait for it to exit.
+                    if !daemon.is_running().await {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        continue;
+                    }
+                    let status = daemon.wait_for_exit().await;
+                    if let Some(status) = status {
+                        if !daemon.was_intentional_stop().await {
+                            let body = if let Some(code) = status.code() {
+                                format!("The background daemon exited unexpectedly (code {code}). Use the tray menu to restart it.")
+                            } else {
+                                "The background daemon exited unexpectedly. Use the tray menu to restart it.".to_string()
+                            };
+                            let _ = monitor_handle.notification().builder()
+                                .title("Hi-EV daemon stopped")
+                                .body(body)
+                                .show();
+                        }
+                    }
                 }
             });
 
@@ -52,11 +101,12 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("Failed to build Tauri app")
-        .run(|_app_handle, event| {
+        .run(|app_handle, event| {
             if let RunEvent::Exit = event {
+                // Stop the daemon cleanly when the app exits.
+                let handle = app_handle.state::<DaemonHandle>().inner().clone();
                 tauri::async_runtime::block_on(async {
-                    // DaemonHandle is managed state; try to stop it cleanly.
-                    // We cannot access managed state here easily, so cleanup is done in tray quit.
+                    let _ = handle.stop().await;
                 });
             }
         });

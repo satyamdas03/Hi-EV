@@ -20,6 +20,9 @@ export function SetupWizard() {
   const setError = useStore((s) => s.setError)
 
   const [, setDefaults] = useState<SetupDefaults | null>(null)
+  const [pythonOk, setPythonOk] = useState(true)
+  const [pythonVersion, setPythonVersion] = useState<string | null>(null)
+  const [pythonPath, setPythonPath] = useState<string | null>(null)
   const [notesPath, setNotesPath] = useState('')
   const [provider, setProvider] = useState('nvidia')
   const [model, setModel] = useState('')
@@ -38,6 +41,9 @@ export function SetupWizard() {
     fetch(`${EV_API_URL}/setup`)
       .then((res) => res.json())
       .then((data) => {
+        setPythonOk(Boolean(data.python_ok))
+        setPythonVersion(data.python_version || null)
+        setPythonPath(data.python_path || null)
         if (!data.needs_setup) {
           setSetupNeeded(false)
           return
@@ -113,7 +119,31 @@ export function SetupWizard() {
 
         <form onSubmit={handleSubmit}>
           <section className="setup-section">
-            <h3>1. Notes vault</h3>
+            <h3>1. Python interpreter</h3>
+            {pythonOk ? (
+              <p className="setup-hint setup-ok">
+                Python {pythonVersion} found at {pythonPath}
+              </p>
+            ) : (
+              <div className="setup-warning-box">
+                <p className="setup-warning">
+                  Python 3.12 or newer is required to run EV but was not found on
+                  this machine.
+                </p>
+                <a
+                  href="https://www.python.org/downloads/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="setup-link"
+                >
+                  Download Python
+                </a>
+              </div>
+            )}
+          </section>
+
+          <section className="setup-section">
+            <h3>2. Notes vault</h3>
             <label>
               Path to your notes folder
               <input
@@ -127,7 +157,7 @@ export function SetupWizard() {
           </section>
 
           <section className="setup-section">
-            <h3>2. LLM provider</h3>
+            <h3>3. LLM provider</h3>
             <p className="setup-hint">
               EV needs a language-model API key for chat. Your key stays in your
               local .env file; it is never sent anywhere else.
@@ -197,7 +227,7 @@ export function SetupWizard() {
           </section>
 
           <section className="setup-section">
-            <h3>3. Optional integrations</h3>
+            <h3>4. Optional integrations</h3>
             <label>
               GitHub personal token
               <input
@@ -210,7 +240,7 @@ export function SetupWizard() {
           </section>
 
           <section className="setup-section">
-            <h3>4. Personal-only boundary</h3>
+            <h3>5. Personal-only boundary</h3>
             <p className="setup-hint">
               Comma-separated handles or domains EV must never ingest or act
               on.
@@ -236,7 +266,7 @@ export function SetupWizard() {
           </section>
 
           <section className="setup-section">
-            <h3>5. Quiet hours</h3>
+            <h3>6. Quiet hours</h3>
             <div className="setup-row">
               <label>
                 Start
@@ -258,7 +288,12 @@ export function SetupWizard() {
           </section>
 
           <div className="setup-actions">
-            <button type="submit" className="setup-submit" disabled={saving || !notesPath}>
+            <button
+              type="submit"
+              className="setup-submit"
+              disabled={saving || !notesPath || !pythonOk}
+              title={pythonOk ? 'Save configuration' : 'Install Python 3.12+ to continue'}
+            >
               {saving ? 'Saving…' : 'Finish setup'}
             </button>
           </div>

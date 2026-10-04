@@ -1,6 +1,7 @@
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager};
+use tauri_plugin_notification::NotificationExt;
 
 use crate::daemon::DaemonHandle;
 
@@ -12,6 +13,8 @@ pub fn build_tray(handle: &AppHandle) -> Result<(), String> {
     let start_i = MenuItem::with_id(handle, "start", "Start daemon", true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let stop_i = MenuItem::with_id(handle, "stop", "Stop daemon", true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let updates_i = MenuItem::with_id(handle, "updates", "Check for updates", true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let settings_i = MenuItem::with_id(handle, "settings", "Settings", true, None::<&str>)
         .map_err(|e| e.to_string())?;
@@ -29,6 +32,7 @@ pub fn build_tray(handle: &AppHandle) -> Result<(), String> {
             &sep1,
             &start_i,
             &stop_i,
+            &updates_i,
             &settings_i,
             &sep2,
             &quit_i,
@@ -90,6 +94,41 @@ async fn handle_tray_event(handle: &AppHandle, id: &str) -> Result<(), String> {
         "stop" => {
             let state = handle.state::<DaemonHandle>();
             state.stop().await?;
+        }
+        "updates" => {
+            let state = handle.state::<DaemonHandle>();
+            let url = format!("{}/update/check", state.base_url);
+            match reqwest::get(&url).await {
+                Ok(resp) if resp.status().is_success() => {
+                    let info: serde_json::Value = resp.json().await.unwrap_or_default();
+                    let (title, body) = match info.get("update_available").and_then(|v| v.as_bool()) {
+                        Some(true) => {
+                            let latest = info.get("latest").and_then(|v| v.as_str()).unwrap_or("newer");
+                            let url = info.get("url").and_then(|v| v.as_str()).unwrap_or("https://github.com/satyamdas03/Hi-EV/releases");
+                            (
+                                "Hi-EV update available",
+                                format!("Version {latest} is available. Installer: {url}"),
+                            )
+                        }
+                        _ => (
+                            "Hi-EV is up to date",
+                            format!(
+                                "Current version: {}",
+                                info.get("current").and_then(|v| v.as_str()).unwrap_or("unknown")
+                            ),
+                        ),
+                    };
+                    let _ = handle.notification().builder().title(title).body(body).show();
+                }
+                _ => {
+                    let _ = handle
+                        .notification()
+                        .builder()
+                        .title("Hi-EV update check failed")
+                        .body("Could not reach the Hi-EV daemon to check for updates.")
+                        .show();
+                }
+            }
         }
         "quit" => {
             let state = handle.state::<DaemonHandle>();

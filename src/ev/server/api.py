@@ -31,6 +31,7 @@ from ev.server.utils import _in_quiet_hours
 from ev.skills import load_skills_into_registry
 from ev.skills.manager import SkillManager
 from ev.tools.registry import ToolRegistry
+from ev.updater.checker import UpdateChecker
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +360,9 @@ class SetupResponse(BaseModel):
     env_path: str
     missing: list[str]
     message: str
+    python_ok: bool
+    python_version: str | None
+    python_path: str | None
     defaults: dict
 
 
@@ -366,6 +370,18 @@ class SetupResponse(BaseModel):
 async def health():
     settings = get_settings()
     return {"status": "ok", "llm_ready": settings.llm_ready()}
+
+
+@app.get("/update/check")
+async def check_for_updates():
+    """Return whether a newer Hi-EV release is available on GitHub.
+
+    This endpoint is read-only: it compares versions and returns the installer
+    URL, but it never downloads or runs anything without user confirmation.
+    """
+    checker = UpdateChecker()
+    result = await checker.check()
+    return result
 
 
 @app.get("/setup", response_model=SetupResponse)
@@ -378,6 +394,9 @@ async def setup_status():
         env_path=str(status.env_path),
         missing=status.missing,
         message=status.message,
+        python_ok=status.python_ok,
+        python_version=status.python_version,
+        python_path=status.python_path,
         defaults=get_setup_defaults(),
     )
 

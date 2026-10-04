@@ -1,4 +1,4 @@
-use std::process::Stdio;
+use std::process::{ExitStatus, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::async_runtime::Mutex;
@@ -9,6 +9,7 @@ use tokio::time::timeout;
 pub struct DaemonHandle {
     pub base_url: String,
     child: Arc<Mutex<Option<Child>>>,
+    stopping: Arc<Mutex<bool>>,
 }
 
 impl DaemonHandle {
@@ -16,6 +17,7 @@ impl DaemonHandle {
         Self {
             base_url,
             child: Arc::new(Mutex::new(None)),
+            stopping: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -25,6 +27,10 @@ impl DaemonHandle {
         if lock.is_some() {
             return Err("Daemon already running".to_string());
         }
+
+        // Reset the intentional-stop flag so a crash monitor can distinguish
+        // a deliberate stop from an unexpected exit.
+        *self.stopping.lock().await = false;
 
         let mut cmd = Command::new(&python_bin);
         cmd.arg("-m")
@@ -63,13 +69,37 @@ impl DaemonHandle {
         lock.is_some()
     }
 
+    /// Wait for the daemon process to exit and return its exit status.
+    /// Returns `None` if no daemon was tracked or if the wait timed out.
+    pub async fn wait_for_exit(&self) -> Option<ExitStatus> {
+        let mut lock = self.child.lock().await;
+        if let Some(child) = lock.as_mut() {
+            let result = match timeout(Duration::from_secs(60), child.wait()).await {
+                Ok(Ok(status)) => Some(status),
+                _ => None,
+            };
+            // Once the process has exited, clear the tracked child so is_running is accurate.
+            if result.is_some() {
+                let _ = lock.take();
+            }
+            return result;
+        }
+        None
+    }
+
     /// Stop the daemon gracefully, falling back to kill after a timeout.
     pub async fn stop(&self) -> Result<(), String> {
+        *self.stopping.lock().await = true;
         let mut lock = self.child.lock().await;
         if let Some(mut child) = lock.take() {
             let _ = child.start_kill();
             let _ = timeout(Duration::from_secs(5), child.wait()).await;
         }
         Ok(())
+    }
+
+    /// Return whether the last stop was intentional.
+    pub async fn was_intentional_stop(&self) -> bool {
+        *self.stopping.lock().await
     }
 }
