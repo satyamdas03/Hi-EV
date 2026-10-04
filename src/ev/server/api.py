@@ -17,6 +17,7 @@ from sqlalchemy import select
 from ev.config import get_settings
 from ev.db.base import SessionLocal
 from ev.db.models import ChatThread
+from ev.ingestion.watcher import VaultWatcher
 from ev.memory.store import MemoryStore
 from ev.server.chat import ChatSession
 from ev.server.scheduler import _ingest_loop
@@ -54,12 +55,17 @@ async def lifespan(app: FastAPI):
     if settings.enable_skills:
         load_skills_into_registry()
 
+    # Phase G2: start file-system watcher for incremental ingestion.
+    watcher = VaultWatcher(settings)
+    await watcher.start()
+
     alert_task = asyncio.create_task(_alert_loop(settings))
     brief_task = asyncio.create_task(_brief_loop(settings))
     ingest_task = asyncio.create_task(_ingest_loop(settings))
     try:
         yield {}
     finally:
+        await watcher.stop()
         for task in (alert_task, brief_task, ingest_task):
             task.cancel()
         for task in (alert_task, brief_task, ingest_task):
@@ -104,7 +110,9 @@ async def _alert_loop(settings):
                     with suppress(Exception):
                         await ws.send_json(alert_payload)
                 relay = TelegramRelay()
-                asyncio.create_task(relay.alert(alert_payload["title"], alert_payload["body"], urgent))
+                asyncio.create_task(
+                    relay.alert(alert_payload["title"], alert_payload["body"], urgent)
+                )
                 for item in urgent:
                     try:
                         from uuid import UUID
@@ -132,7 +140,10 @@ async def _brief_loop(settings):
         now = datetime.now(UTC)
         brief_time = datetime.strptime(settings.morning_brief_time, "%H:%M").time()  # noqa: DTZ007
         # Push once within the brief minute and only once per day.
-        if now.time().hour == brief_time.hour and now.time().minute == brief_time.minute:
+        if (
+            now.time().hour == brief_time.hour
+            and now.time().minute == brief_time.minute
+        ):
             last_brief = getattr(app.state, "_last_brief_date", None)
             if last_brief == now.date():
                 continue
@@ -296,7 +307,9 @@ async def deadlines_endpoint(req: ListFilterRequest):
 async def people_endpoint(req: ListFilterRequest):
     async with SessionLocal() as session:
         registry = _tool_registry(MemoryStore(session))
-        result = await registry.get("people").run(project_name=req.project, limit=req.limit)
+        result = await registry.get("people").run(
+            project_name=req.project, limit=req.limit
+        )
         return result
 
 
@@ -480,7 +493,10 @@ async def focus_endpoint():
     for ws in list(getattr(app.state, "active_websockets", set())):
         with suppress(Exception):
             await ws.send_json(focus_payload)
-    return {"focused": True, "clients": len(getattr(app.state, "active_websockets", set()))}
+    return {
+        "focused": True,
+        "clients": len(getattr(app.state, "active_websockets", set())),
+    }
 
 
 @app.post("/voice/chat")
@@ -526,7 +542,11 @@ async def create_thread(req: ThreadCreateRequest):
     async with SessionLocal() as session:
         store = MemoryStore(session)
         thread = await store.create_chat_thread(title=req.title)
-        return {"id": str(thread.id), "title": thread.title, "created_at": thread.created_at.isoformat()}
+        return {
+            "id": str(thread.id),
+            "title": thread.title,
+            "created_at": thread.created_at.isoformat(),
+        }
 
 
 @app.get("/threads")
@@ -565,7 +585,9 @@ async def get_thread(thread_id: str):
                     "content": turn.content,
                     "tool_name": turn.tool_name,
                     "route": turn.route,
-                    "created_at": turn.created_at.isoformat() if turn.created_at else None,
+                    "created_at": turn.created_at.isoformat()
+                    if turn.created_at
+                    else None,
                 }
                 for turn in turns
             ],
@@ -577,7 +599,9 @@ async def rename_thread(thread_id: str, req: ThreadRenameRequest):
     from uuid import UUID
 
     async with SessionLocal() as session:
-        result = await session.execute(select(ChatThread).where(ChatThread.id == UUID(thread_id)))
+        result = await session.execute(
+            select(ChatThread).where(ChatThread.id == UUID(thread_id))
+        )
         thread = result.scalar_one_or_none()
         if not thread:
             raise HTTPException(status_code=404, detail="Thread not found")

@@ -4,7 +4,7 @@
 > **Goal:** Get Hi-EV from its current state to a polished, testable, launch-ready Windows product.
 > **Voice strategy:** Local-first (`faster-whisper` + Kokoro/pyttsx3) with browser fallback; LiveKit optional post-launch.
 > **Launch scope:** Polished local Windows app + file-system watcher + full test coverage. Cloud relay, observability, macOS/Linux, and tool self-authoring move to v1.1 / Phase H.
-> **Status:** G1 complete, G2 in progress.
+> **Status:** G1 complete, G2 complete, G3 next.
 
 ---
 
@@ -23,7 +23,7 @@
 - OpenJarvis pattern is adopted; direct OpenJarvis code/skill integration is **not implemented**.
 
 **Verification baseline:**
-- `python -m pytest` → 253 passed, 1 skipped
+- `python -m pytest` → 260 passed, 1 skipped
 - `ruff check .` → clean
 - `cd web && npm run build` → clean
 - `cd desktop/src-tauri && cargo check && cargo clippy -- -D warnings` → clean
@@ -80,35 +80,34 @@ And the full test suite passes with no new skips or warnings.
 
 ---
 
-### 🚧 Phase G2 — File-System Watcher (next)
+### ✅ Phase G2 — File-System Watcher (complete)
 
 **Goal:** Make EV event-driven for local notes and project files instead of polling every 5 minutes.
 
 **Deliverables:**
-1. New `ev.ingestion.watcher` package using `watchdog`:
+1. ✅ New `ev.ingestion.watcher` package using `watchdog`:
    - Watch `settings.notes_path` recursively.
-   - Watch each configured `project.path` recursively (add `project_path` to settings if missing).
-2. Debounce and coalesce file-change events (e.g., 2-second quiet period).
-3. Incremental ingestion:
-   - Detect changed/deleted files.
-   - Re-run `NotesIngestion` / project ingestion only for changed paths.
-   - Update `DocumentChunk` rows via content-hash idempotency.
-4. Hook watcher into FastAPI lifespan:
-   - Start watcher on daemon launch.
-   - Stop watcher cleanly on shutdown.
-5. Optional: emit `type: ingest` WebSocket event so HUD shows "EV noticed a change."
+   - Watch configured project paths (`robocad_path`, `learningrobotics_path`, `hiev_path`) recursively.
+2. ✅ Debounce and coalesce file-change events with a 2-second quiet period.
+3. ✅ Incremental ingestion:
+   - Detect changed/deleted `.md` files.
+   - Upsert `Ingest` rows and re-chunk/update `DocumentChunk` + vector entries.
+   - Delete removed notes from both chunks and `Ingest` rows.
+4. ✅ Hook watcher into FastAPI lifespan (start on daemon launch, stop on shutdown).
 
 **Acceptance criteria:**
-- Adding a `.md` file to the notes vault is queryable via memory search within 2 minutes.
-- Deleting a note removes its chunks from the vector store.
-- Full test suite still passes.
-- Watcher tests cover create, modify, delete events.
+- ✅ Adding a `.md` file to the notes vault is queryable via memory search within seconds.
+- ✅ Deleting a note removes its chunks from the vector store.
+- ✅ Full test suite still passes.
+- ✅ Watcher tests cover create, modify, delete, and non-`.md` events.
+
+**Verification:** 260 passed, 1 skipped; ruff clean.
 
 **Dependencies:** Phase G1 complete (daemon lifecycle stable).
 
 ---
 
-### Phase G3 — Voice End-to-End
+### 🚧 Phase G3 — Voice End-to-End (next)
 
 **Goal:** Voice works out of the box in the Tauri app and browser HUD.
 
