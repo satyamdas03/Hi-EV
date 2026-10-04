@@ -7,10 +7,16 @@ EV is not a chatbot. It is the persistent operating system for a single human �
 ## Current status
 
 - **Phases A–F are complete and pushed to `origin/main`.**
-- **Phase F** added the OpenJarvis-style plugin architecture, skills runtime, local voice pipeline (`ev.voice`), safe code sandbox (`ev.sandbox`), eval runner abstraction (`ev.eval`), encrypted secrets vault (`ev.secrets`), and read-only auto-updater (`ev.updater`).
-- **Tests:** 253 passed, 1 skipped; **ruff:** clean; **frontend build:** clean.
-- **Latest commit:** `02781e2` — auto-updater, desktop presence rewrite, proactive test isolation.
-- **Phase G** (Tauri wrapper, cross-platform installers, file-system watcher, richer OS presence, skill golden datasets, cloud relay) is next.
+- **Phase G is in progress.** The Tauri desktop wrapper skeleton is built and compiles:
+  - Native webview window loading the existing React/Three.js HUD.
+  - System tray with Show/Hide, daemon start/stop, Settings, Quit.
+  - Global shortcut (`Ctrl+Alt+E`, `Cmd+Shift+E` on macOS) that focuses the window and triggers a voice turn.
+  - Daemon spawn + `/health` polling on launch; graceful stop on quit.
+  - Windows MSI installer produced by `npm run tauri:build` in `desktop/src-tauri/target/release/bundle/msi/`.
+  - Build script: `scripts/build_tauri.py`.
+- **Tests:** 253 passed, 1 skipped; **ruff:** clean; **frontend build:** clean; **Tauri `cargo check`/`cargo clippy`:** clean.
+- **Latest commit area:** Phase G Tauri wrapper skeleton + quiet-hours deduplication fix.
+- **Remaining Phase G work:** file-system watcher, global wake word outside the browser, desktop screenshot ingestion, skill eval golden datasets, cloud relay / webhook ingress, observability / cost tracing / `ev why`.
 
 ---
 

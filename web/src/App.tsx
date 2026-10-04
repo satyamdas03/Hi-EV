@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { EvBridge } from './lib/bridge'
 import { getMicLevel } from './lib/audio'
 import { startListening, stopListening, handleBridgeEvent, startWakeListening, stopWakeListening } from './lib/voice'
+import { onShortcutTriggered } from './lib/tauri'
 import { useStore } from './store'
 import { EV_API_URL } from './config'
 import { Scene } from './scene/Scene'
@@ -90,6 +91,19 @@ export function App() {
       unsubscribe()
       stopWakeListening()
     }
+  }, [bridge])
+
+  useEffect(() => {
+    const cleanup = onShortcutTriggered(() => {
+      window.focus()
+      const phase = useStore.getState().phase
+      if (phase === 'offline') {
+        // Fall through to wake listening after bridge connects.
+      } else if (phase === 'dormant' || phase === 'speaking' || phase === 'thinking') {
+        void startListening(bridge)
+      }
+    })
+    return cleanup
   }, [bridge])
 
   useEffect(() => {

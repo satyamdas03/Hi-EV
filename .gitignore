@@ -167,6 +167,11 @@ eval_report.json
 web/node_modules/
 web/dist/
 
+# Tauri desktop build artifacts
+desktop/node_modules/
+desktop/.DS_Store
+desktop/src-tauri/gen/
+
 # OS
 .DS_Store
 Thumbs.db

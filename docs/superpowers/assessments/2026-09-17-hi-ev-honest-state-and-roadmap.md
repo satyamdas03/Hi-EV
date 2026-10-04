@@ -1,11 +1,12 @@
 # Hi-EV — Honest State Assessment and Roadmap to the Full Vision
 
-> **Date:** 2026-10-03 (updated)
-> **Commit:** `02781e2`
+> **Date:** 2026-10-04 (updated)
+> **Commit area:** Phase G Tauri wrapper skeleton + quiet-hours fix
 > **Tests:** 253 passed, 1 skipped
 > **Ruff:** clean
 > **Frontend build:** clean
-> **Status:** Web/Voice/HUD MVP complete. Phases A–F complete and pushed to `origin/main`. Phase G — Tauri wrapper, richer OS presence, skill evals, cloud relay, observability — is next.
+> **Tauri build:** `cargo check`/`cargo clippy` clean; Windows MSI produced
+> **Status:** Web/Voice/HUD MVP complete. Phases A–F complete and pushed to `origin/main`. Phase G is in progress: Tauri desktop wrapper skeleton built.
 
 ---
 
@@ -319,15 +320,19 @@ We propose **six phases**, each with a clear deliverable and acceptance criteria
 **Goal:** Wrap EV in a native desktop shell, deepen OS-level presence, measure skill quality, add cloud/webhook ingress, and trace cost/latency/audit.
 
 **Deliverables:**
-1. Tauri desktop wrapper and cross-platform installers (Windows, macOS, Linux).
-2. Richer OS-level presence:
+1. ✅ Tauri desktop wrapper skeleton:
+   - Native window loading `web/dist`, system tray, global shortcut, daemon manager.
+   - Windows MSI installer produced; macOS/Linux targets configured.
+2. 🚧 Tauri wrapper polish before launch:
+   - Real icons, setup-wizard Python check, configurable shortcut, cross-platform smoke tests.
+3. Richer OS-level presence:
    - Global wake word (Porcupine/openWakeWord) outside the browser.
    - Desktop capture / screenshot ingestion.
    - Intent bridging from OS notifications and share sheets.
-3. File-system watcher for notes vault and project directories.
-4. Skill eval harness and example golden datasets.
-5. Cloud relay / webhook ingress for Telegram, GitHub webhooks, and future phone/email fallback.
-6. Observability / cost tracing:
+4. File-system watcher for notes vault and project directories.
+5. Skill eval harness and example golden datasets.
+6. Cloud relay / webhook ingress for Telegram, GitHub webhooks, and future phone/email fallback.
+7. Observability / cost tracing:
    - Structured logging (OpenTelemetry or JSON).
    - Per-request cost/latency/audit traces.
    - `ev why` audit query tool.
@@ -337,7 +342,7 @@ We propose **six phases**, each with a clear deliverable and acceptance criteria
 - A webhook from GitHub or Telegram reaches the local daemon through a minimal cloud relay.
 - Skill eval suite produces pass/fail reports with per-skill latency.
 - Cost/latency traces are queryable for any chat turn.
-- Full test suite still passes; ruff clean; frontend build clean.
+- Full test suite still passes; ruff clean; frontend build clean; Tauri build clean.
 
 ---
 
