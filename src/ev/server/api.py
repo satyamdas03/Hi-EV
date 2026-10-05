@@ -18,7 +18,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from ev.config import get_settings
@@ -484,7 +484,7 @@ class VoiceSettingsResponse(BaseModel):
 
 
 class VoiceSpeakRequest(BaseModel):
-    text: str
+    text: str = Field(..., max_length=5000)
 
 
 class _CapturingWebSocket:
@@ -512,9 +512,17 @@ def _available_voice_backends(kind: str) -> list[str]:
     """Return the names of registered voice backends that can be imported."""
     from ev.core import registry
 
+    # Ensure backend modules are imported so their @register decorators run.
+    # This is especially important for /voice/settings, which is called before
+    # any VoiceManager instantiation would trigger lazy imports.
+    if kind == "stt":
+        from ev.voice import stt as _stt_module  # noqa: F401
+    elif kind == "tts":
+        from ev.voice import tts as _tts_module  # noqa: F401
+
     names: list[str] = []
     for name in registry[kind].list():
-        cls = registry[kind].get(name)
+        cls = registry[kind].get_class(name)
         try:
             # Attempt a no-args instantiation; backends that raise VoiceBackendError
             # because of missing optional dependencies are still listed, but ones
@@ -540,11 +548,18 @@ async def voice_settings():
     )
 
 
+_MAX_VOICE_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
 @app.post("/voice/transcribe")
 async def voice_transcribe(audio: UploadFile | None = None):
     """Transcribe an uploaded WAV/audio file using the configured STT backend."""
     if audio is None:
         raise HTTPException(status_code=400, detail="No audio file uploaded")
+    if audio.content_type and not audio.content_type.startswith("audio/"):
+        raise HTTPException(
+            status_code=400, detail="Uploaded file must be an audio file"
+        )
     settings = get_settings()
     if not settings.voice_enabled:
         raise HTTPException(status_code=400, detail="Voice is disabled in settings")
@@ -555,10 +570,17 @@ async def voice_transcribe(audio: UploadFile | None = None):
     # Discard untrusted filename to avoid path traversal / arbitrary file write.
     safe_name = f"{uuid.uuid4().hex}.wav"
     input_path = upload_dir / safe_name
-    input_path.write_bytes(await audio.read())
 
     try:
+        audio_bytes = await audio.read()
+        if len(audio_bytes) > _MAX_VOICE_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413, detail="Audio file exceeds 10 MB limit"
+            )
+        input_path.write_bytes(audio_bytes)
         transcript = await manager.transcribe(input_path)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("Voice transcription failed: %s", exc)
         raise HTTPException(status_code=500, detail="Transcription failed") from exc
