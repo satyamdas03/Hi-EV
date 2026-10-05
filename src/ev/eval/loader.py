@@ -22,6 +22,7 @@ def _build_case(data: dict[str, Any]) -> EvalCase:
         tool=data["tool"],
         args=data.get("args", {}),
         expect=data.get("expect", {}),
+        setup_actions=data.get("setup_actions", []),
     )
 
 
@@ -39,7 +40,11 @@ def load_suite(path: Path) -> EvalSuite:
         raise ValueError(f"Unsupported eval suite format: {suffix}")
 
     cases = [_build_case(c) for c in data.get("cases", [])]
-    return EvalSuite(name=data.get("suite", path.stem), cases=cases)
+    return EvalSuite(
+        name=data.get("suite", path.stem),
+        cases=cases,
+        setup_actions=data.get("setup_actions", []),
+    )
 
 
 def load_suites(directory: Path) -> list[EvalSuite]:

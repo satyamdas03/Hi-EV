@@ -1,0 +1,28 @@
+{
+  "suite": "summarize_notes",
+  "setup_actions": [
+    {
+      "action": "seed_notes",
+      "project": "RoboCAD",
+      "notes": [
+        {
+          "content": "RoboCAD Phase 22 complete: multi-physics verification engine, 330/330 tests passing."
+        },
+        {
+          "content": "RoboCAD Phase 23 next: humanoid and full-robot system synthesis, biped/quadruped templates."
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "name": "summarizes seeded RoboCAD notes",
+      "tool": "summarize_notes",
+      "args": {"project": "RoboCAD", "k": 2},
+      "expect": {
+        "contains": "RoboCAD",
+        "json_path": {"path": "$.skill", "equals": "summarize_notes"}
+      }
+    }
+  ]
+}

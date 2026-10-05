@@ -14,6 +14,7 @@ class EvalCase:
     tool: str
     args: dict[str, Any] = field(default_factory=dict)
     expect: dict[str, Any] = field(default_factory=dict)
+    setup_actions: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -34,6 +35,7 @@ class EvalSuite:
 
     name: str
     cases: list[EvalCase]
+    setup_actions: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

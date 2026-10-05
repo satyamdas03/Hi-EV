@@ -52,8 +52,16 @@ class SkillTool(BaseTool):
 
     async def _render_prompt(self, args: dict[str, Any]) -> dict[str, Any]:
         body = self.manifest.body
+        # Apply declared defaults for any missing optional parameters so the
+        # prompt template can always resolve its placeholders.
+        merged = {
+            p.name: p.default
+            for p in self.manifest.parameters
+            if p.default is not None
+        }
+        merged.update(args)
         try:
-            rendered = body.format(**args)
+            rendered = body.format(**merged)
         except KeyError as exc:
             return {"error": f"Missing placeholder in skill body: {exc}", "skill": self.name}
 

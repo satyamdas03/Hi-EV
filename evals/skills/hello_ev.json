@@ -1,0 +1,21 @@
+{
+  "suite": "hello_ev",
+  "cases": [
+    {
+      "name": "greets by name",
+      "tool": "hello_ev",
+      "args": {"name": "Satyam"},
+      "expect": {
+        "contains": ["Satyam", "EV"]
+      }
+    },
+    {
+      "name": "uses default name",
+      "tool": "hello_ev",
+      "args": {},
+      "expect": {
+        "contains": "friend"
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import click
 from sqlalchemy import select
@@ -480,6 +481,29 @@ def run_eval(suite_dir: str, json_output: bool):
             click.echo(json_report(results))
         else:
             click.echo(text_report(results))
+
+    asyncio.run(_run())
+
+
+@eval.command("skills")
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON report")
+def run_skill_evals(json_output: bool):
+    """Run the built-in skill eval suites in evals/skills/."""
+    from ev.eval.reporter import json_report, text_report
+    from ev.eval.runner import EvalRunner
+
+    async def _run():
+        from ev.db.base import Base, engine
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        async with SessionLocal() as session:
+            store = MemoryStore(session)
+            runner = EvalRunner(suite_dirs=[Path(__file__).resolve().parents[3] / "evals" / "skills"], store=store)
+            results = await runner.run()
+            if json_output:
+                click.echo(json_report(results))
+            else:
+                click.echo(text_report(results))
 
     asyncio.run(_run())
 
