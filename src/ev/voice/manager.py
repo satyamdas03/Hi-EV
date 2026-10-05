@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from ev.config import Settings, get_settings
-from ev.voice.component import BaseSTTBackend, BaseTTSBackend
+from ev.voice.component import BaseSTTBackend, BaseTTSBackend, VoiceBackendError
 from ev.voice.io import VoiceIOError, record_until_silence
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class VoiceManager:
 
     def _default_stt(self) -> BaseSTTBackend:
         """Pick the best available STT backend."""
-        from ev.voice.stt import FasterWhisperSTT, MockSTT, VoiceBackendError
+        from ev.voice.stt import FasterWhisperSTT, MockSTT
 
         name = self.settings.voice_stt_backend or "faster_whisper"
         model_dir = self.settings.voice_model_dir
@@ -40,7 +40,7 @@ class VoiceManager:
 
     def _default_tts(self) -> BaseTTSBackend:
         """Pick the best available TTS backend."""
-        from ev.voice.tts import KokoroTTS, MockTTS, Pyttsx3TTS, VoiceBackendError
+        from ev.voice.tts import KokoroTTS, MockTTS, Pyttsx3TTS
 
         name = self.settings.voice_tts_backend or "pyttsx3"
         model_dir = self.settings.voice_model_dir

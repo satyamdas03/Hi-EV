@@ -314,6 +314,36 @@ def apply_setup(req: SetupRequest, settings: Settings | None = None) -> dict[str
     }
 
 
+def _available_voice_backends(kind: str) -> list[str]:
+    """Return the names of registered voice backends that can be imported.
+
+    Mirrors the helper in ``ev.server.api`` but lives here so setup defaults
+    can include available backends without creating an import cycle.
+    """
+    from ev.core import registry
+
+    if kind == "stt":
+        from ev.voice import stt as _stt_module  # noqa: F401
+    elif kind == "tts":
+        from ev.voice import tts as _tts_module  # noqa: F401
+
+    names: list[str] = []
+    for name in registry[kind].list():
+        cls = registry[kind].get_class(name)
+        try:
+            # Backends that raise VoiceBackendError because of missing optional
+            # dependencies are still listed, but unrelated ImportErrors are skipped.
+            cls()
+            names.append(name)
+        except Exception as exc:  # noqa: BLE001
+            from ev.voice.component import VoiceBackendError
+
+            if isinstance(exc, VoiceBackendError):
+                names.append(name)
+    return sorted(names)
+
+
+
 def get_setup_defaults() -> dict[str, Any]:
     """Return sensible defaults for the setup wizard form."""
     settings = get_settings()
@@ -328,6 +358,8 @@ def get_setup_defaults() -> dict[str, Any]:
         "voice_enabled": settings.voice_enabled,
         "voice_stt_backend": settings.voice_stt_backend or "",
         "voice_tts_backend": settings.voice_tts_backend or "",
+        "available_stt": _available_voice_backends("stt"),
+        "available_tts": _available_voice_backends("tts"),
         "robocad_path": _default_repo_path("RoboCAD"),
         "learningrobotics_path": _default_repo_path("LearningRobotics"),
         "hiev_path": _default_repo_path("Hi-EV"),

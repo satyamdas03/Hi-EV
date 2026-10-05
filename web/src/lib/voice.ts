@@ -6,10 +6,12 @@
  * interface; local Whisper/Piper/Kokoro can replace it later.
  */
 
+import { EV_API_URL } from '../config'
 import { useStore } from '../store'
 import type { BridgeEvent } from './bridge'
 import { EvBridge } from './bridge'
 import { getMicrophone, releaseMicrophone } from './audio'
+import { IS_TAURI } from './tauri'
 import { isSpeaking, speak, stopSpeaking } from './tts'
 
 let recognition: SpeechRecognition | null = null
@@ -28,6 +30,75 @@ function getSpeechRecognition(): SpeechRecognition | null {
 
 function setPhase(phase: ReturnType<typeof useStore.getState>['phase']) {
   useStore.getState().setPhase(phase)
+}
+
+async function recordWithMediaRecorder(maxMs = 5000): Promise<Blob> {
+  const { stream } = await getMicrophone()
+  const mimeType = MediaRecorder.isTypeSupported('audio/wav')
+    ? 'audio/wav'
+    : MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : ''
+  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+  const chunks: Blob[] = []
+  recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) chunks.push(e.data)
+  }
+  recorder.start(250)
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      if (recorder.state !== 'inactive') recorder.stop()
+    }, maxMs)
+    recorder.onstop = () => {
+      window.clearTimeout(timer)
+      const blob = new Blob(chunks, { type: mimeType || 'audio/wav' })
+      resolve(blob)
+    }
+    recorder.onerror = (e) => {
+      window.clearTimeout(timer)
+      reject(new Error(`Recorder error: ${e}`))
+    }
+  })
+}
+
+async function transcribeBlob(blob: Blob): Promise<string> {
+  const formData = new FormData()
+  const ext = blob.type === 'audio/webm' ? 'webm' : blob.type === 'audio/mp4' ? 'mp4' : 'wav'
+  formData.append('audio', blob, `voice.${ext}`)
+  const res = await fetch(`${EV_API_URL}/voice/transcribe`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: 'Transcription request failed' }))
+    throw new Error(body.detail || `Transcription failed (${res.status})`)
+  }
+  const data = (await res.json()) as { transcript?: string }
+  return data.transcript || ''
+}
+
+async function startDaemonListening(bridge: EvBridge) {
+  try {
+    setPhase('listening')
+    stopSpeaking()
+    const blob = await recordWithMediaRecorder(5000)
+    const text = await transcribeBlob(blob)
+    releaseMicrophone()
+    if (text.trim()) {
+      useStore.getState().setCaption(null)
+      useStore.getState().addUserTurn(text.trim())
+      setPhase('thinking')
+      bridge.sendTranscript(text.trim())
+    } else {
+      setPhase('dormant')
+    }
+  } catch (err) {
+    releaseMicrophone()
+    useStore.getState().setError(`Voice fallback failed: ${err}`)
+    setPhase('dormant')
+  }
 }
 
 export async function startListening(bridge: EvBridge) {
@@ -49,6 +120,13 @@ export async function startListening(bridge: EvBridge) {
 
   const rec = getSpeechRecognition()
   if (!rec) {
+    // Inside the Tauri desktop shell, fall back to the local daemon's
+    // /voice/transcribe endpoint instead of relying on browser APIs.
+    if (IS_TAURI) {
+      active = false
+      await startDaemonListening(bridge)
+      return
+    }
     useStore.getState().setError('SpeechRecognition not supported in this browser.')
     setPhase('dormant')
     active = false

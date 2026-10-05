@@ -747,6 +747,22 @@ body,
   }
 }
 
+.setup-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  text-transform: none !important;
+  color: var(--text) !important;
+  font-size: 0.85rem !important;
+  letter-spacing: normal !important;
+}
+
+.setup-checkbox input {
+  width: auto;
+  margin: 0;
+}
+
 .setup-actions {
   display: flex;
   align-items: center;

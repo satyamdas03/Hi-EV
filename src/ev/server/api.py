@@ -511,6 +511,7 @@ def _response_from_captured(sent: list[dict[str, Any]]) -> str:
 def _available_voice_backends(kind: str) -> list[str]:
     """Return the names of registered voice backends that can be imported."""
     from ev.core import registry
+    from ev.voice.component import VoiceBackendError
 
     # Ensure backend modules are imported so their @register decorators run.
     # This is especially important for /voice/settings, which is called before
@@ -529,9 +530,12 @@ def _available_voice_backends(kind: str) -> list[str]:
             # that raise unrelated ImportError are skipped.
             cls()
             names.append(name)
+        except VoiceBackendError as exc:
+            logger.debug("Voice backend %s/%s missing deps: %s", kind, name, exc)
+            names.append(name)
         except Exception as exc:  # noqa: BLE001
             logger.debug("Voice backend %s/%s not available: %s", kind, name, exc)
-    return names
+    return sorted(names)
 
 
 @app.get("/voice/settings", response_model=VoiceSettingsResponse)

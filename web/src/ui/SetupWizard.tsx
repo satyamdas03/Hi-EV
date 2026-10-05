@@ -16,6 +16,8 @@ export type SetupDefaults = {
   voice_enabled?: boolean
   voice_stt_backend?: string
   voice_tts_backend?: string
+  available_stt?: string[]
+  available_tts?: string[]
 }
 
 export function SetupWizard() {
@@ -40,6 +42,8 @@ export function SetupWizard() {
   const [voiceEnabled, setVoiceEnabled] = useState(false)
   const [voiceSttBackend, setVoiceSttBackend] = useState('')
   const [voiceTtsBackend, setVoiceTtsBackend] = useState('')
+  const [availableStt, setAvailableStt] = useState<string[]>([])
+  const [availableTts, setAvailableTts] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState('')
 
@@ -64,6 +68,8 @@ export function SetupWizard() {
         setVoiceEnabled(Boolean(defs.voice_enabled))
         setVoiceSttBackend(defs.voice_stt_backend || '')
         setVoiceTtsBackend(defs.voice_tts_backend || '')
+        setAvailableStt(defs.available_stt || [])
+        setAvailableTts(defs.available_tts || [])
       })
       .catch((err) => {
         setError(`Could not load setup status: ${err}`)
@@ -299,12 +305,83 @@ export function SetupWizard() {
             </div>
           </section>
 
+          <section className="setup-section">
+            <h3>7. Voice (optional)</h3>
+            <p className="setup-hint">
+              Enable local speech-to-text and text-to-speech so you can talk to
+              EV. Everything runs on your machine; no voice data leaves the
+              device.
+            </p>
+            <label className="setup-checkbox">
+              <input
+                type="checkbox"
+                checked={voiceEnabled}
+                onChange={(e) => setVoiceEnabled(e.target.checked)}
+              />
+              Enable voice
+            </label>
+            {voiceEnabled && (
+              <div className="setup-row">
+                <label>
+                  Speech-to-text
+                  <select
+                    value={voiceSttBackend}
+                    onChange={(e) => setVoiceSttBackend(e.target.value)}
+                  >
+                    {availableStt.length > 0 ? (
+                      availableStt.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">No STT backends found</option>
+                    )}
+                  </select>
+                </label>
+                <label>
+                  Text-to-speech
+                  <select
+                    value={voiceTtsBackend}
+                    onChange={(e) => setVoiceTtsBackend(e.target.value)}
+                  >
+                    {availableTts.length > 0 ? (
+                      availableTts.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">No TTS backends found</option>
+                    )}
+                  </select>
+                </label>
+              </div>
+            )}
+            {voiceEnabled && (!voiceSttBackend || !voiceTtsBackend) && (
+              <p className="setup-warning">
+                Select both a STT and TTS backend, or disable voice to continue.
+              </p>
+            )}
+          </section>
+
           <div className="setup-actions">
             <button
               type="submit"
               className="setup-submit"
-              disabled={saving || !notesPath || !pythonOk}
-              title={pythonOk ? 'Save configuration' : 'Install Python 3.12+ to continue'}
+              disabled={
+                saving ||
+                !notesPath ||
+                !pythonOk ||
+                (voiceEnabled && (!voiceSttBackend || !voiceTtsBackend))
+              }
+              title={
+                !pythonOk
+                  ? 'Install Python 3.12+ to continue'
+                  : voiceEnabled && (!voiceSttBackend || !voiceTtsBackend)
+                    ? 'Select both voice backends'
+                    : 'Save configuration'
+              }
             >
               {saving ? 'Saving…' : 'Finish setup'}
             </button>

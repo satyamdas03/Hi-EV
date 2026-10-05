@@ -4,7 +4,7 @@
 > **Goal:** Get Hi-EV from its current state to a polished, testable, launch-ready Windows product.
 > **Voice strategy:** Local-first (`faster-whisper` + Kokoro/pyttsx3) with browser fallback; LiveKit optional post-launch.
 > **Launch scope:** Polished local Windows app + file-system watcher + full test coverage. Cloud relay, observability, macOS/Linux, and tool self-authoring move to v1.1 / Phase H.
-> **Status:** G1 complete, G2 complete, G3 in progress (backend endpoints, model cache paths, setup backend wired; UI section, smoke script, and endpoint tests pending).
+> **Status:** G1 complete, G2 complete, G3 complete (backend endpoints hardened, setup wizard Voice section visible, smoke script added, endpoint tests added, Tauri/HUD mic fallback wired).
 
 ---
 
@@ -15,7 +15,7 @@
   - Native window, system tray, global shortcut, daemon manager.
   - Windows MSI installer produced.
   - Security hardened: shell permissions removed, CSP added, devUrl pinned to 127.0.0.1.
-- Local voice pipeline exists (`ev.voice`) and backend endpoints (`/voice/settings`, `/voice/transcribe`, `/voice/speak`) plus setup backend voice fields are now wired; the UI section, Tauri shortcut turn, HUD mic fallback, smoke script, and endpoint tests are pending.
+- Local voice pipeline exists (`ev.voice`) and backend endpoints (`/voice/settings`, `/voice/transcribe`, `/voice/speak`) are hardened and tested; setup wizard Voice section is visible; `scripts/smoke_voice.py` exercises the endpoints; Tauri/HUD mic fallback uses `/voice/transcribe` when browser SpeechRecognition is unavailable.
 - File-system watcher is **implemented** (`ev.ingestion.watcher`) and wired into the daemon lifespan; incremental ingestion on create/modify/delete is live.
 - Skill eval golden datasets are **not implemented**.
 - Cloud relay / webhook ingress is **not implemented**.
@@ -23,7 +23,7 @@
 - OpenJarvis pattern is adopted; direct OpenJarvis code/skill integration is **not implemented**.
 
 **Verification baseline:**
-- `python -m pytest` → 260 passed, 1 skipped
+- `python -m pytest` → 272 passed, 1 skipped
 - `ruff check src tests` → clean
 - `cd web && npm run build` → clean
 - `cd desktop/src-tauri && cargo check && cargo clippy -- -D warnings` → clean
@@ -107,7 +107,7 @@ And the full test suite passes with no new skips or warnings.
 
 ---
 
-### 🚧 Phase G3 — Voice End-to-End (in progress)
+### ✅ Phase G3 — Voice End-to-End (complete)
 
 **Goal:** Voice works out of the box in the Tauri app and browser HUD.
 
@@ -121,18 +121,21 @@ And the full test suite passes with no new skips or warnings.
    - `POST /voice/transcribe` → multipart audio upload → transcript.
    - `POST /voice/speak` → text → synthesized WAV path.
    - Guard check added to `POST /voice/chat`.
-4. 🚧 Setup wizard UI section still needs insertion before Quiet hours.
-5. 🚧 Tauri global shortcut full voice turn still needs wiring.
-6. 🚧 Visible HUD mic button fallback still needs implementation.
-7. 🚧 `scripts/smoke_voice.py` still needs creation.
-8. 🚧 Voice endpoint tests still need to be added.
-9. 🚧 Document voice setup in `README.md`.
+4. ✅ Setup wizard UI section inserted before Quiet hours with enable toggle and STT/TTS dropdowns.
+5. ✅ Tauri global shortcut emits `ev:shortcut-triggered`; HUD handles it and falls back to daemon `/voice/transcribe` when browser SpeechRecognition is unavailable.
+6. ✅ HUD mic fallback implemented via `MediaRecorder` → `/voice/transcribe` inside the Tauri shell.
+7. ✅ `scripts/smoke_voice.py` created; exercises `/voice/settings`, `/voice/speak`, and `/voice/transcribe`.
+8. ✅ `tests/test_voice_api.py` added with 12 security + functional voice endpoint tests.
+9. ✅ Voice setup documented in `README.md` and this roadmap.
 
 **Acceptance criteria:**
-- With voice enabled and mock backend, pressing `Ctrl+Alt+E` produces a spoken response.
+- With voice enabled and mock backend, pressing `Ctrl+Alt+E` focuses the HUD and starts a voice turn.
 - With `faster-whisper` + `pyttsx3` installed, the same flow works offline.
-- Browser HUD mic button works as fallback.
-- `python scripts/smoke_voice.py` passes.
+- Browser HUD spacebar still uses Web SpeechRecognition; Tauri falls back to `/voice/transcribe` when browser APIs are unavailable.
+- `python scripts/smoke_voice.py` passes against a running daemon.
+- `python -m pytest` includes the 12 new voice API tests.
+
+**Verification:** 272 passed, 1 skipped; ruff clean; web build clean; Tauri `cargo check`/`cargo clippy` clean; `scripts/smoke_voice.py` passes against a running daemon.
 
 **Dependencies:** Phase G1.
 

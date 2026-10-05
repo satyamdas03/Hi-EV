@@ -28,6 +28,10 @@ class BaseTTSBackend(ABC):
         """Synthesize text to an audio file and return its path."""
 
 
+class VoiceBackendError(Exception):
+    """Raised when a voice backend cannot be initialized (e.g. missing deps)."""
+
+
 # STT/TTS have their own registries within the global registry dict.
 registry["stt"] = type(registry["tool"])("stt")
 registry["tts"] = type(registry["tool"])("tts")

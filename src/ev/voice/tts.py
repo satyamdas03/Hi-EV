@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ev.core import register
-from ev.voice.component import BaseTTSBackend
+from ev.voice.component import BaseTTSBackend, VoiceBackendError
 
 logger = logging.getLogger(__name__)
 
@@ -104,5 +104,3 @@ class MockTTS(BaseTTSBackend):
         return output_path
 
 
-class VoiceBackendError(Exception):
-    """Raised when a voice backend cannot be initialized."""

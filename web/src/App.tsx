@@ -52,7 +52,7 @@ export function App() {
         return res.json()
       })
       .then((data) => {
-        setSetupNeeded(Boolean(data.setup_needed))
+        setSetupNeeded(Boolean(data.needs_setup))
       })
       .catch(() => {
         // If the daemon is not reachable, assume we are still booting and do not block UI.
